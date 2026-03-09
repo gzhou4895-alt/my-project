@@ -65,7 +65,10 @@ jobs:
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
     - name: Update Feeds
-      run: cd openwrt && ./scripts/feeds update -a
+      run: |
+        cd openwrt
+        cat feeds.conf.default
+        ./scripts/feeds update -a || (echo "Feeds update failed!" && cat feeds.conf.default && exit 1)
 
     - name: Install Feeds
       run: cd openwrt && ./scripts/feeds install -a

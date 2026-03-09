@@ -17,5 +17,8 @@
 #echo 'src-git helloworld https://github.com/fw876/helloworld' >> feeds.conf.default
 #echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >> feeds.conf.default
 
-# 添加 OpenClash 源
-echo 'src-git openclash https://github.com/vernesong/OpenClash.git;main' >> feeds.conf.default
+# 添加 OpenClash 源 (使用 dev 分支兼容 23.05)
+echo 'src-git openclash https://github.com/vernesong/OpenClash.git;dev' >> feeds.conf.default
+
+# 添加 GitHub 代理加速 (可选，国内用户建议启用)
+# sed -i 's|https://github.com|https://ghproxy.com/https://github.com|g' feeds.conf.default
