@@ -5,15 +5,16 @@ import android.content.Intent;
 import android.os.IBinder;
 import android.util.Log;
 import java.io.*;
-import java.net.InetSocketAddress;
-import com.sun.net.httpserver.HttpServer;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpExchange;
+import java.util.Map;
+import java.util.HashMap;
+import fi.iki.elonen.NanoHTTPD;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 
 public class LiteRTService extends Service {
     private static final String TAG = "LiteRTService";
     private static final int PORT = 8080;
-    private HttpServer server;
+    private HTTPServer server;
 
     @Override
     public void onCreate() {
@@ -21,12 +22,10 @@ public class LiteRTService extends Service {
         Log.e(TAG, "onCreate started");
         
         try {
-            server = HttpServer.create(new InetSocketAddress(PORT), 0);
-            server.createContext("/v1/chat/completions", new ChatHandler());
-            server.setExecutor(null);
+            server = new HTTPServer(PORT);
             server.start();
             Log.e(TAG, "HTTP server started on port " + PORT);
-        } catch (Exception e) {
+        } catch (IOException e) {
             Log.e(TAG, "Failed to start server", e);
         }
     }
@@ -39,7 +38,7 @@ public class LiteRTService extends Service {
     @Override
     public void onDestroy() {
         if (server != null) {
-            server.stop(0);
+            server.stop();
         }
         super.onDestroy();
     }
@@ -49,14 +48,47 @@ public class LiteRTService extends Service {
         return null;
     }
 
-    class ChatHandler implements HttpHandler {
+    private class HTTPServer extends NanoHTTPD {
+        public HTTPServer(int port) {
+            super(port);
+        }
+
         @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            String response = "{\"message\":\"Hello from LiteRT Adapter\"}";
-            exchange.sendResponseHeaders(200, response.getBytes().length);
-            OutputStream os = exchange.getResponseBody();
-            os.write(response.getBytes());
-            os.close();
+        public Response serve(IHTTPSession session) {
+            String uri = session.getUri();
+            Log.e(TAG, "Request: " + uri);
+            
+            if ("/v1/chat/completions".equals(uri)) {
+                try {
+                    Map<String, String> files = new HashMap<>();
+                    session.parseBody(files);
+                    String body = files.get("postData");
+                    
+                    JsonObject responseJson = new JsonObject();
+                    responseJson.addProperty("id", "chatcmpl-" + System.currentTimeMillis());
+                    responseJson.addProperty("object", "chat.completion");
+                    responseJson.addProperty("created", System.currentTimeMillis() / 1000);
+                    responseJson.addProperty("model", "gemma-4-e2b");
+                    
+                    JsonObject choice = new JsonObject();
+                    choice.addProperty("index", 0);
+                    JsonObject msg = new JsonObject();
+                    msg.addProperty("role", "assistant");
+                    msg.addProperty("content", "这是来自 LiteRT Adapter 的测试回复。");
+                    choice.add("message", msg);
+                    choice.addProperty("finish_reason", "stop");
+                    
+                    com.google.gson.JsonArray choices = new com.google.gson.JsonArray();
+                    choices.add(choice);
+                    responseJson.add("choices", choices);
+                    
+                    return newFixedLengthResponse(Response.Status.OK, "application/json", responseJson.toString());
+                } catch (Exception e) {
+                    Log.e(TAG, "Error", e);
+                    return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", e.toString());
+                }
+            }
+            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found");
         }
     }
 }
