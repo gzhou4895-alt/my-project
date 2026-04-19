@@ -17,28 +17,39 @@ public class LiteRTService extends Service {
     private static final int PORT = 8080;
     private HTTPServer server;
     private static final String MODEL_PATH = "/sdcard/Download/gemma-4-E2B-it.litertlm";
+    private static final String LOG_FILE = "/sdcard/Download/litert_adapter_debug.log";
+
+    private void writeFileLog(String msg) {
+        try {
+            FileWriter fw = new FileWriter(LOG_FILE, true);
+            fw.append(msg + "\n");
+            fw.close();
+        } catch (Exception ignored) {}
+    }
 
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.e(TAG, "onCreate started");
+        writeFileLog("=== onCreate started ===");
         
         try {
             server = new HTTPServer(PORT);
             server.start();
-            Log.e(TAG, "HTTP server started on port " + PORT);
+            writeFileLog("HTTP server started on port " + PORT);
         } catch (IOException e) {
-            Log.e(TAG, "Failed to start server", e);
+            writeFileLog("Failed to start server: " + e.toString());
         }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        writeFileLog("onStartCommand");
         return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
+        writeFileLog("onDestroy");
         if (server != null) {
             server.stop();
         }
@@ -53,27 +64,30 @@ public class LiteRTService extends Service {
     private class HTTPServer extends NanoHTTPD {
         public HTTPServer(int port) throws IOException {
             super("0.0.0.0", port);
+            writeFileLog("HTTPServer constructor");
         }
 
         @Override
         public Response serve(IHTTPSession session) {
             String uri = session.getUri();
-            Log.e(TAG, "Request: " + uri);
+            writeFileLog("Request received: " + uri);
             
             if ("/v1/chat/completions".equals(uri)) {
                 try {
                     Map<String, String> files = new HashMap<>();
                     session.parseBody(files);
                     String body = files.get("postData");
+                    writeFileLog("Request body: " + body);
                     
                     JsonObject request = JsonParser.parseString(body).getAsJsonObject();
                     JsonObject message = request.getAsJsonArray("messages")
                             .get(request.getAsJsonArray("messages").size() - 1)
                             .getAsJsonObject();
                     String prompt = message.get("content").getAsString();
+                    writeFileLog("Prompt: " + prompt);
 
                     String responseText = runLitertLM(prompt);
-                    Log.e(TAG, "Model response: " + responseText);
+                    writeFileLog("Model response: " + responseText);
 
                     JsonObject responseJson = new JsonObject();
                     responseJson.addProperty("id", "chatcmpl-" + System.currentTimeMillis());
@@ -95,14 +109,19 @@ public class LiteRTService extends Service {
                     
                     return newFixedLengthResponse(Response.Status.OK, "application/json", responseJson.toString());
                 } catch (Exception e) {
-                    Log.e(TAG, "Error", e);
+                    writeFileLog("EXCEPTION in serve: " + e.toString());
+                    StringWriter sw = new StringWriter();
+                    PrintWriter pw = new PrintWriter(sw);
+                    e.printStackTrace(pw);
+                    writeFileLog(sw.toString());
                     return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", e.toString());
                 }
             }
             return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found");
         }
         
-        private String runLitertLM(String prompt) throws IOException, InterruptedException {
+        private String runLitertLM(String prompt) {
+            writeFileLog("runLitertLM called with prompt: " + prompt);
             try {
                 ProcessBuilder pb = new ProcessBuilder(
                         "litert-lm", "run",
@@ -111,7 +130,10 @@ public class LiteRTService extends Service {
                         "--max-tokens=512"
                 );
                 pb.redirectErrorStream(true);
+                writeFileLog("Starting process: " + pb.command());
+                
                 Process process = pb.start();
+                writeFileLog("Process started, waiting for output...");
                 
                 BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
                 StringBuilder output = new StringBuilder();
@@ -119,14 +141,23 @@ public class LiteRTService extends Service {
                 while ((line = reader.readLine()) != null) {
                     output.append(line);
                 }
+                writeFileLog("Process output finished, length: " + output.length());
+                
                 int exitCode = process.waitFor();
+                writeFileLog("Process exit code: " + exitCode);
+                
                 if (exitCode != 0) {
-                    Log.e(TAG, "litert-lm exit code: " + exitCode);
-                    return "模型调用失败，请检查Termux环境";
+                    return "模型调用失败，退出码: " + exitCode;
                 }
-                return output.toString().trim();
+                String result = output.toString().trim();
+                writeFileLog("Final result: " + result);
+                return result;
             } catch (Exception e) {
-                Log.e(TAG, "runLitertLM exception", e);
+                writeFileLog("EXCEPTION in runLitertLM: " + e.toString());
+                StringWriter sw = new StringWriter();
+                PrintWriter pw = new PrintWriter(sw);
+                e.printStackTrace(pw);
+                writeFileLog(sw.toString());
                 return "模型调用出错: " + e.getMessage();
             }
         }
