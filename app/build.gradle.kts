@@ -1,6 +1,11 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
+
 android {
     namespace = "com.example.hello"
-    compileSdk = 34 // 2. 建议升级到 34 以更好地支持 Java 21
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.hello"
@@ -11,7 +16,7 @@ android {
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             isMinifyEnabled = false
         }
     }
@@ -22,7 +27,6 @@ android {
     }
 
     kotlinOptions {
-        // 3. 将 Kotlin 目标也对齐到 21，防止版本冲突
         jvmTarget = "21"
     }
 }
@@ -30,5 +34,5 @@ android {
 dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.code.gson:gson:2.10.1")
-    // 这里是你那个报错的库，确保它被正确引入
+    // 这里如果还有你那个 litertlm 的依赖也请保留
 }
