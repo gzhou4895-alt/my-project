@@ -24,7 +24,7 @@ class LiteRTService : Service() {
         try {
             val config = EngineConfig.builder()
                 .setModelPath(modelPath)
-                .setBackend(Backend.GPU) // 使用 GPU 加速
+                .setBackend(Backend.GPU)
                 .build()
             engine = Engine.create(config)
             Log.e(TAG, "Engine initialized successfully")
@@ -67,16 +67,13 @@ class LiteRTService : Service() {
                     session.parseBody(files)
                     val body = files["postData"] ?: "{}"
 
-                    // 解析请求
                     val requestJson = com.google.gson.JsonParser.parseString(body).asJsonObject
                     val messages = requestJson.getAsJsonArray("messages")
                     val lastMessage = messages[messages.size() - 1].asJsonObject
                     val prompt = lastMessage.get("content").asString
 
-                    // 调用模型推理
                     val responseText = runInference(prompt)
 
-                    // 构建响应
                     val responseJson = com.google.gson.JsonObject().apply {
                         addProperty("id", "chatcmpl-${System.currentTimeMillis()}")
                         addProperty("object", "chat.completion")
@@ -94,18 +91,10 @@ class LiteRTService : Service() {
                         })
                     }
 
-                    newFixedLengthResponse(
-                        Response.Status.OK,
-                        "application/json",
-                        responseJson.toString()
-                    )
+                    newFixedLengthResponse(Response.Status.OK, "application/json", responseJson.toString())
                 } catch (e: Exception) {
                     Log.e(TAG, "Error processing request", e)
-                    newFixedLengthResponse(
-                        Response.Status.INTERNAL_ERROR,
-                        "text/plain",
-                        e.toString()
-                    )
+                    newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", e.toString())
                 }
             }
             return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found")
@@ -113,7 +102,6 @@ class LiteRTService : Service() {
 
         private fun runInference(prompt: String): String {
             return try {
-                // 使用 LiteRT-LM 的同步推理 API
                 val response = engine.generate(prompt)
                 response.text
             } catch (e: Exception) {
