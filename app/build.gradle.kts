@@ -36,6 +36,6 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
-    // 使用本地 AAR 文件集成 LiteRT-LM
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
+    // 显式指定 AAR 文件
+    implementation(files("libs/litertlm-android-0.10.2.aar"))
 }
