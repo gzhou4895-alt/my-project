@@ -12,5 +12,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "LiteRTAdapter"
+
+rootProject.name = "LiteRTDemo"
 include(":app")
