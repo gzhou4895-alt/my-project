@@ -27,7 +27,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = "21"
+        jvmTarget = "17"
     }
 }
 
@@ -36,6 +36,6 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
-    // 显式指定 AAR 文件
+    // 本地 AAR 文件
     implementation(files("libs/litertlm-android-0.10.2.aar"))
 }
