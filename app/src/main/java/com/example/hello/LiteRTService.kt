@@ -4,43 +4,39 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.util.Log
-import com.google.ai.edge.litertlm.Engine
-import com.google.ai.edge.litertlm.EngineConfig
-import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.LlmInference
 import fi.iki.elonen.NanoHTTPD
 import java.io.IOException
 
 class LiteRTService : Service() {
-    private var engine: Engine? = null
+    private var llmInference: LlmInference? = null
     private var server: HTTPServer? = null
     private val port = 8080
+    // 确保这个路径在你的手机上是正确的
     private val modelPath = "/sdcard/Download/gemma-4-E2B-it.litertlm"
 
     override fun onCreate() {
         super.onCreate()
         Log.e(TAG, "onCreate started")
 
+        // 1. 初始化推理引擎 (官方 LlmInference 方式)
         try {
-            // 修正 1：0.10.2 版本中，Builder 必须这样显式调用
-            val configBuilder = EngineConfig.builder()
-            configBuilder.setModelPath(modelPath)
+            val options = LlmInference.LlmInferenceOptions.builder()
+                .setModelPath(modelPath)
+                .setMaxTopK(40)
+                .setTemperature(0.7f)
+                .build()
             
-            // 修正 2：Backend.GPU 在某些版本是单例，某些是类。
-            // 如果 Backend.GPU() 报错，请试着直接用 Backend.GPU
-            configBuilder.setBackend(Backend.GPU()) 
-            
-            val config = configBuilder.build()
-            
-            // 修正 3：Engine 的创建
-            engine = Engine.create(config)
-            
-            Log.e(TAG, "Engine initialized successfully")
+            // 注意：第一个参数是 Context
+            llmInference = LlmInference.create(this, options)
+            Log.e(TAG, "LlmInference initialized successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize engine", e)
+            Log.e(TAG, "Failed to initialize LlmInference", e)
             stopSelf()
             return
         }
 
+        // 2. 启动 HTTP 服务器
         try {
             server = HTTPServer(port)
             server?.start()
@@ -50,9 +46,13 @@ class LiteRTService : Service() {
         }
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
+    }
+
     override fun onDestroy() {
         server?.stop()
-        engine?.close()
+        llmInference?.close()
         super.onDestroy()
     }
 
@@ -65,11 +65,12 @@ class LiteRTService : Service() {
                     val files = HashMap<String, String>()
                     session.parseBody(files)
                     val body = files["postData"] ?: "{}"
+
                     val requestJson = com.google.gson.JsonParser.parseString(body).asJsonObject
                     val messages = requestJson.getAsJsonArray("messages")
                     val prompt = messages[messages.size() - 1].asJsonObject.get("content").asString
 
-                    // 修正 4：推理调用
+                    // 调用推理
                     val responseText = runInference(prompt)
 
                     val responseJson = com.google.gson.JsonObject().apply {
@@ -80,9 +81,11 @@ class LiteRTService : Service() {
                                     addProperty("role", "assistant")
                                     addProperty("content", responseText)
                                 })
+                                addProperty("finish_reason", "stop")
                             })
                         })
                     }
+
                     newFixedLengthResponse(Response.Status.OK, "application/json", responseJson.toString())
                 } catch (e: Exception) {
                     newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", e.toString())
@@ -93,11 +96,12 @@ class LiteRTService : Service() {
 
         private fun runInference(prompt: String): String {
             return try {
-                // 修正 5：0.10.2 的 generate 可能返回 Result 对象，需要调用 .text 或直接返回 String
-                val result = engine?.generate(prompt)
-                result ?: "No response from model"
+                // 核心：官方 generateResponse 方法
+                val result = llmInference?.generateResponse(prompt)
+                result ?: "Empty response"
             } catch (e: Exception) {
-                "Inference error: ${e.message}"
+                Log.e(TAG, "Inference failed", e)
+                "Error: ${e.message}"
             }
         }
     }
