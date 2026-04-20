@@ -4,15 +4,19 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <application android:icon="@drawable/ic_launcher"
-android:roundIcon="@drawable/ic_launcher"
+    <application
+        android:icon="@drawable/ic_launcher"
         android:label="LiteRT Adapter"
         android:theme="@android:style/Theme.DeviceDefault">
         
+        <!-- 申请 GPU 加速所需的原生库 -->
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+
         <service
             android:name=".LiteRTService"
             android:exported="true" />
-        
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -21,6 +25,6 @@ android:roundIcon="@drawable/ic_launcher"
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
+
     </application>
 </manifest>
