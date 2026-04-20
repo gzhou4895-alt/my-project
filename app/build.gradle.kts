@@ -36,6 +36,6 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     
-    // LiteRT-LM 核心库，用于在 Android 上运行大语言模型
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.2.0")
+    // LiteRT-LM 依赖（修正后）
+    implementation("com.google.ai.edge.litert:litert-lm-android:latest.release")
 }
