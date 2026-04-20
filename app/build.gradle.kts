@@ -36,6 +36,6 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
-    // LiteRT-LM 官方库，指定明确版本 0.2.0
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.2.0")
+    // 使用本地 AAR 文件集成 LiteRT-LM
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
 }
