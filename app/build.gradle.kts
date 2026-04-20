@@ -1,9 +1,3 @@
-plugins {
-    // 1. 明确指定 AGP 版本为 8.2.2（支持 Java 21）
-    id("com.android.application") version "8.2.2"
-    id("org.jetbrains.kotlin.android") version "1.8.10"
-}
-
 android {
     namespace = "com.example.hello"
     compileSdk = 34 // 2. 建议升级到 34 以更好地支持 Java 21
