@@ -1,16 +1,17 @@
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // 1. 明确指定 AGP 版本为 8.2.2（支持 Java 21）
+    id("com.android.application") version "8.2.2"
+    id("org.jetbrains.kotlin.android") version "1.8.10"
 }
 
 android {
     namespace = "com.example.hello"
-    compileSdk = 33
+    compileSdk = 34 // 2. 建议升级到 34 以更好地支持 Java 21
 
     defaultConfig {
         applicationId = "com.example.hello"
         minSdk = 26
-        targetSdk = 33
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
     }
@@ -27,15 +28,13 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = "17"
+        // 3. 将 Kotlin 目标也对齐到 21，防止版本冲突
+        jvmTarget = "21"
     }
 }
 
 dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.code.gson:gson:2.10.1")
-    implementation("org.nanohttpd:nanohttpd:2.3.1")
-
-    // 本地 AAR 文件
-    implementation(files("libs/litertlm-android-0.10.2.aar"))
+    // 这里是你那个报错的库，确保它被正确引入
 }
