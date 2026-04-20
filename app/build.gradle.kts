@@ -35,7 +35,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
-    
-    // LiteRT-LM 依赖（修正后）
-    implementation("com.google.ai.edge.litert:litert-lm-android:latest.release")
+
+    // LiteRT-LM 官方库 (修正版)
+    implementation("com.google.ai.edge.litertlm:litertlm-android:latest.release")
 }
