@@ -4,14 +4,13 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.util.Log
-import com.google.ai.edge.litertlm.Engine
-import com.google.ai.edge.litertlm.EngineConfig
-import com.google.ai.edge.litertlm.Backend
+// 核心：0.10.x 版本的包名和类名可能更扁平
+import com.google.ai.edge.litertlm.LlmInference
 import fi.iki.elonen.NanoHTTPD
 import java.io.IOException
 
 class LiteRTService : Service() {
-    private var engine: Engine? = null
+    private var llmInference: LlmInference? = null
     private var server: HTTPServer? = null
     private val port = 8080
     private val modelPath = "/sdcard/Download/gemma-4-E2B-it.litertlm"
@@ -22,14 +21,12 @@ class LiteRTService : Service() {
 
         // 初始化推理引擎
         try {
-            // 修正：在 Kotlin 2.0 中调用 Java 内部类 Builder 的构造函数
-            val config = EngineConfig.Builder()
+            // 0.10.x 版本通常使用 LlmInference.create()
+            val options = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(modelPath)
-                .setBackend(Backend.GPU()) // 修正：实例化 Backend.GPU
                 .build()
             
-            // 修正：调用 Engine 类的静态工厂方法
-            engine = Engine.create(config)
+            llmInference = LlmInference.create(this, options)
             Log.e(TAG, "Engine initialized successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize engine", e)
@@ -53,7 +50,7 @@ class LiteRTService : Service() {
 
     override fun onDestroy() {
         server?.stop()
-        engine?.close()
+        llmInference?.close()
         super.onDestroy()
     }
 
@@ -105,9 +102,8 @@ class LiteRTService : Service() {
 
         private fun runInference(prompt: String): String {
             return try {
-                // 修正：确保 engine 已经初始化且调用 generate
-                val response = engine?.generate(prompt)
-                // 注意：根据 LiteRT 版本，这里可能是 response 或 response.text
+                // 0.10.x 版本的生成方法通常叫 generateResponse
+                val response = llmInference?.generateResponse(prompt)
                 response ?: "模型未返回结果"
             } catch (e: Exception) {
                 Log.e(TAG, "Inference failed", e)
