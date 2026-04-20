@@ -22,12 +22,18 @@ android {
     }
 
     compileOptions {
+        // 核心：支持 Java 21
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
 
     kotlinOptions {
         jvmTarget = "21"
+        // 关键补充：强制忽略库与编译器之间的 Kotlin 元数据版本不一致问题
+        freeCompilerArgs = freeCompilerArgs + listOf(
+            "-Xskip-metadata-version-check",
+            "-Xallow-jvm-ir-dependencies"
+        )
     }
 }
 
@@ -40,7 +46,7 @@ dependencies {
     // 2. 网络服务器库 (用于 Adapter 通信)
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
-    // 3. 【关键修改】引用本地 libs 文件夹下的 AAR 文件
-    // 这行会自动加载你放在 app/libs 目录下的 litertlm-android-0.10.2.aar
+    // 3. 引用本地 libs 文件夹下的 AAR 文件
+    // 它会自动加载 app/libs/litertlm-android-0.10.2.aar
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
 }
