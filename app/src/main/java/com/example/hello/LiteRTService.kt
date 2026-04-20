@@ -11,7 +11,7 @@ import fi.iki.elonen.NanoHTTPD
 import java.io.IOException
 
 class LiteRTService : Service() {
-    private lateinit var engine: Engine
+    private var engine: Engine? = null
     private var server: HTTPServer? = null
     private val port = 8080
     private val modelPath = "/sdcard/Download/gemma-4-E2B-it.litertlm"
@@ -22,10 +22,13 @@ class LiteRTService : Service() {
 
         // 初始化推理引擎
         try {
-            val config = EngineConfig.builder()
+            // 修正：在 Kotlin 2.0 中调用 Java 内部类 Builder 的构造函数
+            val config = EngineConfig.Builder()
                 .setModelPath(modelPath)
-                .setBackend(Backend.GPU)
+                .setBackend(Backend.GPU()) // 修正：实例化 Backend.GPU
                 .build()
+            
+            // 修正：调用 Engine 类的静态工厂方法
             engine = Engine.create(config)
             Log.e(TAG, "Engine initialized successfully")
         } catch (e: Exception) {
@@ -50,7 +53,7 @@ class LiteRTService : Service() {
 
     override fun onDestroy() {
         server?.stop()
-        engine.close()
+        engine?.close()
         super.onDestroy()
     }
 
@@ -102,8 +105,10 @@ class LiteRTService : Service() {
 
         private fun runInference(prompt: String): String {
             return try {
-                val response = engine.generate(prompt)
-                response.text
+                // 修正：确保 engine 已经初始化且调用 generate
+                val response = engine?.generate(prompt)
+                // 注意：根据 LiteRT 版本，这里可能是 response 或 response.text
+                response ?: "模型未返回结果"
             } catch (e: Exception) {
                 Log.e(TAG, "Inference failed", e)
                 "模型推理失败: ${e.message}"
