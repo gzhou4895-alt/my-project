@@ -39,6 +39,7 @@ kotlin {
 }
 
 dependencies {
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
 
     // =========================
     // 基础 Android
