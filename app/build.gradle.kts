@@ -6,19 +6,15 @@ plugins {
 }
 
 android {
-    namespace = "com.example.litert"
+    namespace = "com.example.hello"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.litert"
+        applicationId = "com.example.hello"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-
-        ndk {
-            abiFilters += listOf("arm64-v8a") // 跑本地模型建议只留 arm64
-        }
     }
 
     buildTypes {
@@ -31,33 +27,35 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
 }
 
 /**
- * ✅ Kotlin 2.x 新 DSL（替代 kotlinOptions）
+ * Kotlin 2.x / Gradle 8 推荐写法
  */
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
-
-        freeCompilerArgs.addAll(
-            "-Xcontext-receivers",
-            "-opt-in=kotlin.RequiresOptIn"
-        )
     }
 }
 
 dependencies {
+
+    // =========================
+    // 基础 Android
+    // =========================
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.11.0")
 
-    // 如果你后面接 LiteRT / 模型
+    // =========================
+    // LiteRT（TensorFlow Lite）
+    // =========================
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+
+    // 可选：GPU 加速（后面再用）
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+
+    // =========================
+    // Kotlin 协程（后面做推理异步用）
+    // =========================
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
