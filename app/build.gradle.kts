@@ -29,8 +29,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17" // 必须用双引号 ""，不能用单引号 ''
+    compilerOptions {
+    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    // 如果你想保留之前的跳过元数据版本检查，可以加这一行：
+    freeCompilerArgs.add("-Xskip-metadata-version-check")
+}
+
     }
 }
 
