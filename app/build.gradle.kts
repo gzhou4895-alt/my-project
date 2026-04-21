@@ -10,11 +10,13 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.hello"
-        minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+    applicationId = "com.example.hello"
+    minSdk = 24
+    targetSdk = 34
+
+    versionCode = (System.currentTimeMillis() / 1000).toInt()
+    versionName = "1.0.${System.currentTimeMillis()}"
+}
     }
 
     buildTypes {
