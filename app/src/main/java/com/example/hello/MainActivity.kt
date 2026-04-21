@@ -34,7 +34,7 @@ class MainActivity : Activity() {
         button.setOnClickListener {
             val userText = input.text.toString()
 
-            output.text = "🤖 AI思考中...\n\n你的输入是：\n$userText\n\n（这里以后接LiteRT模型）"
+            output.text = "model.run(input)"
         }
 
         // ===== 加入布局 =====
