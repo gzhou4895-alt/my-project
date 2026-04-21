@@ -27,12 +27,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    
-    // 注意：这里删除了会导致报错的 kotlinOptions 块，改用文件末尾的 tasks.withType
 }
 
 dependencies {
-    // 显式引入 AAR
+    // 显式引入本地 AAR 文件
     implementation(files("libs/litertlm-android-0.10.2.aar")) 
     
     implementation("org.nanohttpd:nanohttpd:2.3.1")
@@ -42,12 +40,14 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
 }
 
-// 解决 Kotlin 2.0 编译器严格检查和元数据版本冲突的终极方案
+// 终极兼容方案：直接操作编译器原始参数，绕过所有 DSL 限制
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    @Suppress("DEPRECATION")
     kotlinOptions {
-        @Suppress("DEPRECATION")
-        this.jvmTarget = "17"
-        // 关键：强制跳过“metadata 2.3.0”版本不匹配的错误
-        freeCompilerArgs.add("-Xskip-metadata-version-check")
+        // 将 jvm-target 作为原始参数传入，避开对 .jvmTarget 属性的直接赋值检查
+        freeCompilerArgs = freeCompilerArgs + listOf(
+            "-jvm-target", "17",
+            "-Xskip-metadata-version-check" // 强制跳过 AAR 库的 Kotlin 元数据版本冲突
+        )
     }
 }
