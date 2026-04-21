@@ -13,13 +13,12 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false // 注意：Kotlin 中是 isMinifyEnabled
+            isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -29,20 +28,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    compilerOptions {
-    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    // 如果你想保留之前的跳过元数据版本检查，可以加这一行：
-    freeCompilerArgs.add("-Xskip-metadata-version-check")
-}
-
+    // 针对 Gradle 8.2 的稳健写法
+    kotlinOptions {
+        jvmTarget = "17"
+        // 强制跳过元数据版本检查，解决 AAR 库 Kotlin 版本过高的问题
+        freeCompilerArgs += listOf("-Xskip-metadata-version-check")
     }
 }
 
 dependencies {
-    // AAR 文件的正确写法
     implementation(files("libs/litertlm-android-0.10.2.aar")) 
-    
-    // 远程库全部改用 括号 + 双引号
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
