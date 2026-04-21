@@ -2,42 +2,39 @@ package com.example.hello
 
 import android.app.Activity
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.widget.*
+import kotlin.random.Random
 
 class MainActivity : Activity() {
+
+    private lateinit var model: LiteModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ===== 根布局 =====
+        model = LiteModel(this)
+
         val layout = LinearLayout(this)
         layout.orientation = LinearLayout.VERTICAL
         layout.setPadding(40, 40, 40, 40)
 
-        // ===== 输入框 =====
         val input = EditText(this)
-        input.hint = "输入你的问题..."
+        input.hint = "输入数字（测试AI）"
 
-        // ===== 按钮 =====
         val button = Button(this)
-        button.text = "发送给AI"
+        button.text = "运行AI"
 
-        // ===== 输出 =====
         val output = TextView(this)
-        output.text = "AI 回复会显示在这里"
         output.textSize = 18f
 
-        // ===== 点击逻辑（先模拟AI）=====
         button.setOnClickListener {
-            val userText = input.text.toString()
+            val value = input.text.toString().toFloatOrNull() ?: 0f
 
-            output.text = "model.run(input)"
+            val result = model.run(floatArrayOf(value))
+
+            output.text = "AI结果：${result[0]}"
         }
 
-        // ===== 加入布局 =====
         layout.addView(input)
         layout.addView(button)
         layout.addView(output)
