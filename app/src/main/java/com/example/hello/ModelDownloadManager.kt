@@ -1,77 +1,63 @@
 package com.example.hello
 
 import android.content.Context
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
-sealed class DownloadState {
-    data object Idle : DownloadState()
-    data class Downloading(val progress: Float) : DownloadState()
-    data class Success(val filePath: String) : DownloadState()
-    data class Error(val message: String) : DownloadState()
-}
-
 class ModelDownloadManager(private val context: Context) {
 
-    private val _state = MutableStateFlow<DownloadState>(DownloadState.Idle)
-    val state: StateFlow<DownloadState> = _state
-
-    suspend fun downloadModel(url: String, fileName: String) {
-        _state.value = DownloadState.Downloading(0f)
-
+    fun downloadModel(
+        urlString: String,
+        fileName: String,
+        onProgress: (Int) -> Unit
+    ) {
         try {
-            withContext(Dispatchers.IO) {
-                val connection = URL(url).openConnection() as HttpURLConnection
-                connection.connectTimeout = 30000
-                connection.readTimeout = 30000
-                connection.requestMethod = "GET"
-                connection.connect()
+            val url = URL(urlString)
+            val connection = url.openConnection() as HttpURLConnection
 
-                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                    throw Exception("下载失败，HTTP状态码: ${connection.responseCode}")
-                }
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
+            connection.requestMethod = "GET"
+            connection.connect()
 
-                val contentLength = connection.contentLength
-                val inputStream = connection.inputStream
+            val fileLength = connection.contentLength
 
-                val modelDir = File(context.filesDir, "models")
-                if (!modelDir.exists()) modelDir.mkdirs()
-                val modelFile = File(modelDir, fileName)
-
-                val outputStream = FileOutputStream(modelFile)
-                val buffer = ByteArray(8192)
-                var downloadedBytes = 0L
-                var bytes: Int
-
-                while (inputStream.read(buffer).also { bytes = it } != -1) {
-                    outputStream.write(buffer, 0, bytes)
-                    downloadedBytes += bytes
-
-                    if (contentLength > 0) {
-                        val progress = downloadedBytes.toFloat() / contentLength
-                        _state.value = DownloadState.Downloading(progress)
-                    }
-                }
-
-                outputStream.close()
-                inputStream.close()
-                connection.disconnect()
-
-                _state.value = DownloadState.Success(modelFile.absolutePath)
+            if (fileLength <= 0) {
+                onProgress(0)
             }
-        } catch (e: Exception) {
-            _state.value = DownloadState.Error(e.message ?: "下载过程中出现未知错误")
-        }
-    }
 
-    fun getModelPath(fileName: String): String? {
-        val modelFile = File(context.filesDir, "models/$fileName")
-        return if (modelFile.exists()) modelFile.absolutePath else null
+            val inputStream = connection.inputStream
+
+            // 👉 存储路径（App私有目录）
+            val file = File(context.filesDir, fileName)
+
+            val outputStream = FileOutputStream(file)
+
+            val data = ByteArray(8 * 1024)
+            var total: Long = 0
+            var count: Int
+
+            while (inputStream.read(data).also { count = it } != -1) {
+                total += count
+                outputStream.write(data, 0, count)
+
+                if (fileLength > 0) {
+                    val progress = ((total * 100) / fileLength).toInt()
+                    onProgress(progress)
+                }
+            }
+
+            outputStream.flush()
+            outputStream.close()
+            inputStream.close()
+
+            onProgress(100)
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            onProgress(-1) // 👉 失败标志
+        }
     }
 }
