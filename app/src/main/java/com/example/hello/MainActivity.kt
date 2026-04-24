@@ -1,4 +1,4 @@
-package com.example.myapp
+package com.example.hello
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
@@ -13,12 +13,10 @@ class MainActivity : AppCompatActivity() {
 
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_nav)
 
-        // 首次打开默认显示聊天页
         if (savedInstanceState == null) {
             loadFragment(ChatFragment())
         }
 
-        // 点击底部按钮切换页面
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_chat -> loadFragment(ChatFragment())
@@ -33,22 +31,5 @@ class MainActivity : AppCompatActivity() {
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragment_container, fragment)
             .commit()
-    }
-}            output.text = """
-                🤖 模拟AI回复：
-                
-                你刚刚输入的是：
-                $userText
-                
-                （当前未加载模型）
-            """.trimIndent()
-        }
-
-        // ===== 加入布局 =====
-        layout.addView(input)
-        layout.addView(button)
-        layout.addView(output)
-
-        setContentView(layout)
     }
 }
