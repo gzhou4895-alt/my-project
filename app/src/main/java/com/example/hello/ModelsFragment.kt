@@ -48,25 +48,38 @@ class ModelsFragment : Fragment() {
 
                 val manager = ModelDownloadManager(context)
 
-                // ✅ 显式指定 onProgress，避免尾随 lambda 误传给 onError
+                // ✅ 显式指定 onProgress 和 onError
                 manager.downloadModel(
                     urlString = modelUrl,
                     fileName = modelFileName,
                     onProgress = { progress ->
-                        launch(Dispatchers.Main) {
-                            if (progress == -1) {
-                                // 文件大小未知，显示不确定进度
-                                progressBar.isIndeterminate = true
-                                tvStatus.text = "下载中，请稍候..."
-                            } else if (progress in 0..100) {
-                                progressBar.isIndeterminate = false
-                                progressBar.progress = progress
-                                tvStatus.text = "下载中：$progress%"
+                        // 用 withContext 回主线程更新 UI（launch 在这里不可用）
+                        withContext(Dispatchers.Main) {
+                            when {
+                                progress == -1 -> {
+                                    // 大小未知，显示转圈
+                                    progressBar.isIndeterminate = true
+                                    tvStatus.text = "下载中，请稍候..."
+                                }
+                                progress == 100 -> {
+                                    // 下载完成
+                                    progressBar.isIndeterminate = false
+                                    progressBar.progress = 100
+                                    btnDownload.isEnabled = true
+                                    btnDownload.text = "重新下载"
+                                    progressBar.visibility = View.GONE
+                                    tvStatus.text = "下载完成"
+                                }
+                                progress in 0..99 -> {
+                                    progressBar.isIndeterminate = false
+                                    progressBar.progress = progress
+                                    tvStatus.text = "下载中：$progress%"
+                                }
                             }
                         }
                     },
                     onError = { errorMsg ->
-                        launch(Dispatchers.Main) {
+                        withContext(Dispatchers.Main) {
                             Toast.makeText(context, "下载失败：$errorMsg", Toast.LENGTH_LONG).show()
                             btnDownload.isEnabled = true
                             btnDownload.text = "重新下载"
@@ -75,10 +88,6 @@ class ModelsFragment : Fragment() {
                         }
                     }
                 )
-
-                // 注意：因为下载完成是在 onProgress(100) 里回调的，
-                // 所以“下载完成”的处理放到 onProgress 里判断 progress == 100 更安全。
-                // 这里不再需要 withContext 的完成逻辑。
             }
         }
 
