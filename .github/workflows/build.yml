@@ -31,16 +31,22 @@ jobs:
       - name: Generate icons
         run: |
           sudo apt-get install -y imagemagick
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-          convert ci-assets/icon.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert ci-assets/icon.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert ci-assets/icon.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert ci-assets/icon.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert ci-assets/icon.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+          # 找到项目中所有的 mipmap 文件夹并覆盖图标
+          for mipmap_dir in $(find . -type d -name "mipmap-*"); do
+            mkdir -p "$mipmap_dir"
+            if [[ "$mipmap_dir" == *"mdpi" ]]; then
+              convert ci-assets/icon.png -resize 48x48 "$mipmap_dir/ic_launcher.png"
+            elif [[ "$mipmap_dir" == *"hdpi" ]]; then
+              convert ci-assets/icon.png -resize 72x72 "$mipmap_dir/ic_launcher.png"
+            elif [[ "$mipmap_dir" == *"xhdpi" ]]; then
+              convert ci-assets/icon.png -resize 96x96 "$mipmap_dir/ic_launcher.png"
+            elif [[ "$mipmap_dir" == *"xxhdpi" ]]; then
+              convert ci-assets/icon.png -resize 144x144 "$mipmap_dir/ic_launcher.png"
+            elif [[ "$mipmap_dir" == *"xxxhdpi" ]]; then
+              convert ci-assets/icon.png -resize 192x192 "$mipmap_dir/ic_launcher.png"
+            fi
+          done
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
