@@ -13,9 +13,11 @@ class ModelDownloadManager(private val context: Context) {
         fileName: String,
         onProgress: (Int) -> Unit
     ) {
+        var connection: HttpURLConnection? = null
+
         try {
             val url = URL(urlString)
-            val connection = url.openConnection() as HttpURLConnection
+            connection = url.openConnection() as HttpURLConnection
 
             connection.connectTimeout = 15000
             connection.readTimeout = 15000
@@ -23,29 +25,28 @@ class ModelDownloadManager(private val context: Context) {
             connection.connect()
 
             val fileLength = connection.contentLength
-
-            if (fileLength <= 0) {
-                onProgress(0)
-            }
+            println("fileLength = $fileLength") // 👉 调试用
 
             val inputStream = connection.inputStream
 
             // 👉 存储路径（App私有目录）
             val file = File(context.filesDir, fileName)
-
             val outputStream = FileOutputStream(file)
 
-            val data = ByteArray(8 * 1024)
+            val buffer = ByteArray(8 * 1024)
             var total: Long = 0
             var count: Int
 
-            while (inputStream.read(data).also { count = it } != -1) {
+            while (inputStream.read(buffer).also { count = it } != -1) {
                 total += count
-                outputStream.write(data, 0, count)
+                outputStream.write(buffer, 0, count)
 
+                // 👉 进度计算
                 if (fileLength > 0) {
                     val progress = ((total * 100) / fileLength).toInt()
                     onProgress(progress)
+                } else {
+                    onProgress(-2) // 未知进度
                 }
             }
 
@@ -57,7 +58,9 @@ class ModelDownloadManager(private val context: Context) {
 
         } catch (e: Exception) {
             e.printStackTrace()
-            onProgress(-1) // 👉 失败标志
+            onProgress(-1) // 下载失败
+        } finally {
+            connection?.disconnect()
         }
     }
 }
