@@ -54,7 +54,8 @@
             android:id="@+id/btnDownload"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="下载" />
+            android:text="下载"
+            android:layout_marginStart="8dp"/>
     </LinearLayout>
 
     <ProgressBar
@@ -63,6 +64,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
+        android:max="100"
+        android:progress="0"
         android:visibility="gone" />
 
     <TextView
@@ -70,6 +73,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
+        android:text="等待下载"
         android:textColor="#666"
         android:visibility="gone" />
+
 </LinearLayout>
