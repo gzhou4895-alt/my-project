@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- URL 输入 -->
+    <EditText
+        android:id="@+id/etUrl"
+        android:hint="模型 URL"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <!-- Token 输入 ⭐ -->
+    <EditText
+        android:id="@+id/etToken"
+        android:hint="HuggingFace Token (hf_...)"
+        android:inputType="textPassword"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <!-- 文件名 -->
+    <EditText
+        android:id="@+id/etFileName"
+        android:hint="文件名 model.litertlm"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <!-- 下载按钮 -->
+    <Button
+        android:id="@+id/btnDownload"
+        android:text="开始下载"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <!-- 进度 -->
+    <TextView
+        android:id="@+id/tvProgress"
+        android:text="0%"
+        android:textSize="18sp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+</LinearLayout>
