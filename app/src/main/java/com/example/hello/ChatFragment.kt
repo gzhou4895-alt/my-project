@@ -13,6 +13,6 @@ class ChatFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        return inflater.inflate(R.layout.fragment_chat, container, false)
+        return inflater.inflate(com.example.hello.R.layout.fragment_chat, container, false)
     }
 }
