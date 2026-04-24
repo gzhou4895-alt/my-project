@@ -5,10 +5,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 sealed class DownloadState {
     data object Idle : DownloadState()
@@ -19,7 +19,6 @@ sealed class DownloadState {
 
 class ModelDownloadManager(private val context: Context) {
 
-    private val client = OkHttpClient()
     private val _state = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val state: StateFlow<DownloadState> = _state
 
@@ -28,16 +27,18 @@ class ModelDownloadManager(private val context: Context) {
 
         try {
             withContext(Dispatchers.IO) {
-                val request = Request.Builder().url(url).build()
-                val response = client.newCall(request).execute()
+                val connection = URL(url).openConnection() as HttpURLConnection
+                connection.connectTimeout = 30000
+                connection.readTimeout = 30000
+                connection.requestMethod = "GET"
+                connection.connect()
 
-                if (!response.isSuccessful) {
-                    throw Exception("下载失败，HTTP状态码: ${response.code}")
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    throw Exception("下载失败，HTTP状态码: ${connection.responseCode}")
                 }
 
-                val body = response.body ?: throw Exception("响应体为空")
-                val contentLength = body.contentLength()
-                val inputStream = body.byteStream()
+                val contentLength = connection.contentLength
+                val inputStream = connection.inputStream
 
                 val modelDir = File(context.filesDir, "models")
                 if (!modelDir.exists()) modelDir.mkdirs()
@@ -60,6 +61,7 @@ class ModelDownloadManager(private val context: Context) {
 
                 outputStream.close()
                 inputStream.close()
+                connection.disconnect()
 
                 _state.value = DownloadState.Success(modelFile.absolutePath)
             }
