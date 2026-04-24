@@ -9,9 +9,10 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ModelsFragment : Fragment() {
 
@@ -22,7 +23,7 @@ class ModelsFragment : Fragment() {
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
+    ): View {
         val view = inflater.inflate(R.layout.fragment_models, container, false)
 
         val btnDownload = view.findViewById<Button>(R.id.btnDownload)
@@ -30,15 +31,44 @@ class ModelsFragment : Fragment() {
         val tvStatus = view.findViewById<TextView>(R.id.tvDownloadStatus)
 
         btnDownload.setOnClickListener {
-            Toast.makeText(requireContext(), "按钮被点击了！", Toast.LENGTH_LONG).show()
+
+            val context = requireContext().applicationContext
+
+            Toast.makeText(context, "开始下载模型", Toast.LENGTH_SHORT).show()
+
             btnDownload.text = "下载中..."
             progressBar.visibility = View.VISIBLE
             tvStatus.visibility = View.VISIBLE
             tvStatus.text = "准备下载..."
 
-            CoroutineScope(Dispatchers.IO).launch {
-                val manager = ModelDownloadManager(requireContext())
-                manager.downloadModel(modelUrl, modelFileName)
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+
+                val manager = ModelDownloadManager(context)
+
+                manager.downloadModel(
+                    modelUrl,
+                    modelFileName
+                ) { progress ->
+
+                    // 👉 回到主线程更新 UI
+                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+
+                        if (progress == -1) {
+                            tvStatus.text = "下载失败 ❌"
+                            btnDownload.text = "重试"
+                            return@launch
+                        }
+
+                        tvStatus.text = "下载进度: $progress%"
+                        progressBar.progress = progress
+                    }
+                }
+
+                // 👉 下载完成
+                withContext(Dispatchers.Main) {
+                    tvStatus.text = "下载完成 ✅"
+                    btnDownload.text = "重新下载"
+                }
             }
         }
 
