@@ -1,75 +1,74 @@
 package com.example.hello
 
-import android.content.Context
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.io.File
-import java.io.FileOutputStream
+import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.ProgressBar
+import android.widget.TextView
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
-sealed class DownloadState {
-    data object Idle : DownloadState()
-    data class Downloading(val progress: Float) : DownloadState()
-    data class Success(val filePath: String) : DownloadState()
-    data class Error(val message: String) : DownloadState()
-}
+class ModelsFragment : Fragment() {
 
-class ModelDownloadManager(private val context: Context) {
+    private lateinit var downloadManager: ModelDownloadManager
+    private val modelUrl = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
+    private val modelFileName = "gemma-4-E2B-it.litertlm"
 
-    private val client = OkHttpClient()
-    private val _state = MutableStateFlow<DownloadState>(DownloadState.Idle)
-    val state: StateFlow<DownloadState> = _state
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        val view = inflater.inflate(R.layout.fragment_models, container, false)
+        downloadManager = ModelDownloadManager(requireContext())
 
-    suspend fun downloadModel(url: String, fileName: String) {
-        _state.value = DownloadState.Downloading(0f)
+        val btnDownload = view.findViewById<Button>(R.id.btnDownload)
+        val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
+        val tvStatus = view.findViewById<TextView>(R.id.tvDownloadStatus)
 
-        try {
-            withContext(Dispatchers.IO) {
-                val request = Request.Builder().url(url).build()
-                val response = client.newCall(request).execute()
+        val existingPath = downloadManager.getModelPath(modelFileName)
+        if (existingPath != null) {
+            btnDownload.text = "已下载"
+            btnDownload.isEnabled = false
+            tvStatus.text = "模型已就绪: $modelFileName"
+            tvStatus.visibility = View.VISIBLE
+        }
 
-                if (!response.isSuccessful) {
-                    throw Exception("下载失败，HTTP状态码: ${response.code}")
-                }
+        btnDownload.setOnClickListener {
+            lifecycleScope.launch {
+                btnDownload.isEnabled = false
+                btnDownload.text = "下载中..."
+                progressBar.visibility = View.VISIBLE
+                tvStatus.visibility = View.VISIBLE
 
-                val body = response.body ?: throw Exception("响应体为空")
-                val contentLength = body.contentLength()
-                val inputStream = body.byteStream()
+                downloadManager.downloadModel(modelUrl, modelFileName)
 
-                val modelDir = File(context.filesDir, "models")
-                if (!modelDir.exists()) modelDir.mkdirs()
-                val modelFile = File(modelDir, fileName)
-
-                val outputStream = FileOutputStream(modelFile)
-                val buffer = ByteArray(8192)
-                var downloadedBytes = 0L
-                var bytes: Int
-
-                while (inputStream.read(buffer).also { bytes = it } != -1) {
-                    outputStream.write(buffer, 0, bytes)
-                    downloadedBytes += bytes
-
-                    if (contentLength > 0) {
-                        val progress = downloadedBytes.toFloat() / contentLength
-                        _state.value = DownloadState.Downloading(progress)
+                downloadManager.state.collect { state ->
+                    when (state) {
+                        is DownloadState.Downloading -> {
+                            progressBar.progress = (state.progress * 100).toInt()
+                            tvStatus.text = "下载中: ${(state.progress * 100).toInt()}%"
+                        }
+                        is DownloadState.Success -> {
+                            tvStatus.text = "下载完成！"
+                            btnDownload.text = "已完成"
+                            progressBar.visibility = View.GONE
+                        }
+                        is DownloadState.Error -> {
+                            tvStatus.text = "下载失败: ${state.message}"
+                            btnDownload.text = "重试"
+                            btnDownload.isEnabled = true
+                            progressBar.visibility = View.GONE
+                        }
+                        is DownloadState.Idle -> {}
                     }
                 }
-
-                outputStream.close()
-                inputStream.close()
-
-                _state.value = DownloadState.Success(modelFile.absolutePath)
             }
-        } catch (e: Exception) {
-            _state.value = DownloadState.Error(e.message ?: "下载过程中出现未知错误")
         }
-    }
 
-    fun getModelPath(fileName: String): String? {
-        val modelFile = File(context.filesDir, "models/$fileName")
-        return if (modelFile.exists()) modelFile.absolutePath else null
+        return view
     }
 }
