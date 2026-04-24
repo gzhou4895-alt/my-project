@@ -44,6 +44,9 @@ dependencies {
     // LiteRT（基础推理）
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
 
+    // Material 组件库（底部导航栏、主题等）
+    implementation("com.google.android.material:material:1.11.0")
+
     // 如果后面要GPU可以再开（先不用）
     // implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
 }
