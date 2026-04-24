@@ -14,6 +14,10 @@ android {
 
         versionCode = (System.currentTimeMillis() / 1000).toInt()
         versionName = "1.0.${System.currentTimeMillis()}"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
     }
 
     buildTypes {
