@@ -16,7 +16,8 @@ import kotlinx.coroutines.withContext
 
 class ModelsFragment : Fragment() {
 
-    private val modelUrl = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
+    private val modelUrl =
+        "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
     private val modelFileName = "gemma-4-E2B-it.litertlm"
 
     override fun onCreateView(
@@ -36,6 +37,7 @@ class ModelsFragment : Fragment() {
 
             Toast.makeText(context, "开始下载模型", Toast.LENGTH_SHORT).show()
 
+            btnDownload.isEnabled = false
             btnDownload.text = "下载中..."
             progressBar.visibility = View.VISIBLE
             tvStatus.visibility = View.VISIBLE
@@ -45,22 +47,27 @@ class ModelsFragment : Fragment() {
 
                 val manager = ModelDownloadManager(context)
 
-                manager.downloadModel(
-                    modelUrl,
-                    modelFileName
-                ) { progress ->
+                manager.downloadModel(modelUrl, modelFileName) { progress ->
 
-                    // 👉 回到主线程更新 UI
+                    // 👉 切回主线程更新 UI
                     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
 
-                        if (progress == -1) {
-                            tvStatus.text = "下载失败 ❌"
-                            btnDownload.text = "重试"
-                            return@launch
-                        }
+                        when (progress) {
+                            -1 -> {
+                                tvStatus.text = "下载失败 ❌"
+                                btnDownload.text = "重试"
+                                btnDownload.isEnabled = true
+                            }
 
-                        tvStatus.text = "下载进度: $progress%"
-                        progressBar.progress = progress
+                            -2 -> {
+                                tvStatus.text = "下载中..."
+                            }
+
+                            else -> {
+                                tvStatus.text = "下载进度: $progress%"
+                                progressBar.progress = progress
+                            }
+                        }
                     }
                 }
 
@@ -68,6 +75,7 @@ class ModelsFragment : Fragment() {
                 withContext(Dispatchers.Main) {
                     tvStatus.text = "下载完成 ✅"
                     btnDownload.text = "重新下载"
+                    btnDownload.isEnabled = true
                 }
             }
         }
