@@ -11,6 +11,7 @@ class ModelDownloadManager(private val context: Context) {
     fun downloadModel(
         urlString: String,
         fileName: String,
+        token: String? = null,   // ⭐ 新增 Token（可选）
         onProgress: (Int) -> Unit
     ) {
         var connection: HttpURLConnection? = null
@@ -22,14 +23,21 @@ class ModelDownloadManager(private val context: Context) {
             connection.connectTimeout = 15000
             connection.readTimeout = 15000
             connection.requestMethod = "GET"
+
+            // ⭐ 如果有 token 就加 header
+            token?.let {
+                connection.setRequestProperty("Authorization", "Bearer $it")
+            }
+
+            connection.setRequestProperty("Accept", "*/*")
+
             connection.connect()
 
             val fileLength = connection.contentLength
-            println("fileLength = $fileLength") // 👉 调试用
+            println("fileLength = $fileLength")
 
             val inputStream = connection.inputStream
 
-            // 👉 存储路径（App私有目录）
             val file = File(context.filesDir, fileName)
             val outputStream = FileOutputStream(file)
 
@@ -41,12 +49,11 @@ class ModelDownloadManager(private val context: Context) {
                 total += count
                 outputStream.write(buffer, 0, count)
 
-                // 👉 进度计算
                 if (fileLength > 0) {
                     val progress = ((total * 100) / fileLength).toInt()
                     onProgress(progress)
                 } else {
-                    onProgress(-2) // 未知进度
+                    onProgress(-2)
                 }
             }
 
@@ -58,7 +65,7 @@ class ModelDownloadManager(private val context: Context) {
 
         } catch (e: Exception) {
             e.printStackTrace()
-            onProgress(-1) // 下载失败
+            onProgress(-1)
         } finally {
             connection?.disconnect()
         }
