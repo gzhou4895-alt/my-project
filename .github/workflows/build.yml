@@ -28,8 +28,19 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: Debug - Check project structure
+        run: |
+          echo "=== 查看 res/layout/ 目录内容 ==="
+          ls -la app/src/main/res/layout/
+          echo ""
+          echo "=== 查找所有 fragment 布局文件 ==="
+          find . -name "fragment_*.xml" 2>/dev/null
+          echo ""
+          echo "=== 查看 res/menu/ 目录内容 ==="
+          ls -la app/src/main/res/menu/
+
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew clean assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
