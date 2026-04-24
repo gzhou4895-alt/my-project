@@ -16,8 +16,7 @@ import kotlinx.coroutines.withContext
 
 class ModelsFragment : Fragment() {
 
-    private val modelUrl =
-        "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
+    private val modelUrl = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
     private val modelFileName = "gemma-4-E2B-it.litertlm"
 
     override fun onCreateView(
@@ -25,7 +24,6 @@ class ModelsFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-
         val view = inflater.inflate(R.layout.fragment_models, container, false)
 
         val btnDownload = view.findViewById<Button>(R.id.btnDownload)
@@ -33,64 +31,54 @@ class ModelsFragment : Fragment() {
         val tvStatus = view.findViewById<TextView>(R.id.tvDownloadStatus)
 
         btnDownload.setOnClickListener {
-
             val context = requireContext().applicationContext
-
-            Toast.makeText(context, "开始下载模型", Toast.LENGTH_SHORT).show()
-
+            
+            // UI 状态重置
             btnDownload.isEnabled = false
-            btnDownload.text = "下载中..."
+            btnDownload.text = "连接中..."
             progressBar.visibility = View.VISIBLE
+            progressBar.isIndeterminate = true
             tvStatus.visibility = View.VISIBLE
             tvStatus.text = "准备下载..."
 
             viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-
                 val manager = ModelDownloadManager(context)
+                var lastUpdateTime = 0L
 
-                // ✅ 显式指定 onProgress 和 onError
                 manager.downloadModel(
                     urlString = modelUrl,
                     fileName = modelFileName,
                     onProgress = { progress ->
-                        // 用 withContext 回主线程更新 UI（launch 在这里不可用）
-                        withContext(Dispatchers.Main) {
-                            when {
-                                progress == -1 -> {
-                                    // 大小未知，显示转圈
-                                    progressBar.isIndeterminate = true
-                                    tvStatus.text = "下载中，请稍候..."
-                                }
-                                progress == 100 -> {
-                                    // 下载完成
-                                    progressBar.isIndeterminate = false
-                                    progressBar.progress = 100
-                                    btnDownload.isEnabled = true
-                                    btnDownload.text = "重新下载"
+                        val currentTime = System.currentTimeMillis()
+                        // 限制 UI 刷新频率，每 300ms 更新一次，防止主线程卡死崩溃
+                        if (currentTime - lastUpdateTime > 300 || progress == 100) {
+                            lastUpdateTime = currentTime
+                            withContext(Dispatchers.Main) {
+                                if (progress == 100) {
                                     progressBar.visibility = View.GONE
                                     tvStatus.text = "下载完成"
-                                }
-                                progress in 0..99 -> {
-                                    progressBar.isIndeterminate = false
+                                    btnDownload.isEnabled = true
+                                    btnDownload.text = "重新下载"
+                                } else if (progress >= 0) {
+                                    if (progressBar.isIndeterminate) progressBar.isIndeterminate = false
                                     progressBar.progress = progress
-                                    tvStatus.text = "下载中：$progress%"
+                                    tvStatus.text = "正在下载: $progress%"
                                 }
                             }
                         }
                     },
                     onError = { errorMsg ->
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "下载失败：$errorMsg", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "错误: $errorMsg", Toast.LENGTH_LONG).show()
                             btnDownload.isEnabled = true
-                            btnDownload.text = "重新下载"
-                            progressBar.visibility = View.GONE
+                            btnDownload.text = "点击重试"
                             tvStatus.text = "下载失败"
+                            progressBar.visibility = View.GONE
                         }
                     }
                 )
             }
         }
-
         return view
     }
 }
