@@ -1,40 +1,40 @@
-package com.example.hello
+package com.example.myapp
 
-import android.app.Activity
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.Fragment
+import com.google.android.material.bottomnavigation.BottomNavigationView
 
-class MainActivity : Activity() {
+class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
 
-        // ===== 根布局 =====
-        val layout = LinearLayout(this)
-        layout.orientation = LinearLayout.VERTICAL
-        layout.setPadding(40, 40, 40, 40)
+        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_nav)
 
-        // ===== 输入框 =====
-        val input = EditText(this)
-        input.hint = "输入你的问题..."
+        // 首次打开默认显示聊天页
+        if (savedInstanceState == null) {
+            loadFragment(ChatFragment())
+        }
 
-        // ===== 按钮 =====
-        val button = Button(this)
-        button.text = "发送"
+        // 点击底部按钮切换页面
+        bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_chat -> loadFragment(ChatFragment())
+                R.id.nav_models -> loadFragment(ModelsFragment())
+                R.id.nav_settings -> loadFragment(SettingsFragment())
+            }
+            true
+        }
+    }
 
-        // ===== 输出 =====
-        val output = TextView(this)
-        output.text = "AI 回复会显示在这里"
-        output.textSize = 18f
-
-        // ===== 点击逻辑（不使用模型，保证不崩）=====
-        button.setOnClickListener {
-            val userText = input.text.toString()
-
-            output.text = """
+    private fun loadFragment(fragment: Fragment) {
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragment_container, fragment)
+            .commit()
+    }
+}            output.text = """
                 🤖 模拟AI回复：
                 
                 你刚刚输入的是：
