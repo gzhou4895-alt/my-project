@@ -25,6 +25,7 @@ class ModelsFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
+
         val view = inflater.inflate(R.layout.fragment_models, container, false)
 
         val btnDownload = view.findViewById<Button>(R.id.btnDownload)
@@ -49,33 +50,18 @@ class ModelsFragment : Fragment() {
 
                 manager.downloadModel(modelUrl, modelFileName) { progress ->
 
-                    // 👉 切回主线程更新 UI
+                    // 👉 回到主线程更新 UI
                     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
-
-                        when (progress) {
-                            -1 -> {
-                                tvStatus.text = "下载失败 ❌"
-                                btnDownload.text = "重试"
-                                btnDownload.isEnabled = true
-                            }
-
-                            -2 -> {
-                                tvStatus.text = "下载中..."
-                            }
-
-                            else -> {
-                                tvStatus.text = "下载进度: $progress%"
-                                progressBar.progress = progress
-                            }
-                        }
+                        progressBar.progress = progress
+                        tvStatus.text = "下载中：$progress%"
                     }
                 }
 
-                // 👉 下载完成
+                // 下载完成后
                 withContext(Dispatchers.Main) {
-                    tvStatus.text = "下载完成 ✅"
-                    btnDownload.text = "重新下载"
                     btnDownload.isEnabled = true
+                    btnDownload.text = "重新下载"
+                    tvStatus.text = "下载完成"
                 }
             }
         }
