@@ -1,5 +1,6 @@
 package com.example.hello
 
+import androidx.fragment.app.Fragment
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -7,20 +8,12 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
-import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
-import kotlinx.coroutines.*
 
 class ChatFragment : Fragment() {
 
     private lateinit var viewModel: LogViewModel
-    private lateinit var input: EditText
-    private lateinit var btnSend: Button
-    private lateinit var logView: TextView
-    private lateinit var scrollView: android.widget.ScrollView  // 添加这行
     private val runner = LlmRunner()
-    private var isProcessing = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -33,61 +26,33 @@ class ChatFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        input = view.findViewById(R.id.input)
-        btnSend = view.findViewById(R.id.btnSend)
-        logView = view.findViewById(R.id.logView)
-        scrollView = view.findViewById(R.id.scrollView)  // 添加这行
+        val input = view.findViewById<EditText>(R.id.input)
+        val btn = view.findViewById<Button>(R.id.btnSend)
+        val logView = view.findViewById<TextView>(R.id.logView)
 
         viewModel = ViewModelProvider(this)[LogViewModel::class.java]
 
-        viewModel.logs.observe(viewLifecycleOwner) { logText ->
-            logView.text = logText
-            // 自动滚动到底部
-            scrollView.post {
-                scrollView.fullScroll(android.widget.ScrollView.FOCUS_DOWN)
-            }
+        // 👉 实时刷新 UI
+        viewModel.logs.observe(viewLifecycleOwner) {
+            logView.text = it
         }
 
-        viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
-            btnSend.isEnabled = !isLoading
-            btnSend.text = if (isLoading) "发送中..." else "发送"
-        }
+        btn.setOnClickListener {
+            val text = input.text.toString()
 
-        btnSend.setOnClickListener {
-            val text = input.text.toString().trim()
-            if (text.isNotEmpty() && !isProcessing) {
-                sendMessage(text)
-            } else if (text.isEmpty()) {
-                Toast.makeText(requireContext(), "请输入消息", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
+            viewModel.appendLog("👤 用户: $text")
 
-    private fun sendMessage(message: String) {
-        isProcessing = true
-        viewModel.setLoading(true)
-        input.text.clear()
-        viewModel.appendLog("👤 用户: $message")
-        viewModel.startAiResponse()
-        runModel(message)
+            runModel(text)
+        }
     }
 
     private fun runModel(input: String) {
+
         runner.run(input) { token ->
+
             requireActivity().runOnUiThread {
-                viewModel.appendAiToken(token)
-            }
-        }.let { result ->
-            requireActivity().runOnUiThread {
-                viewModel.finishAiResponse()
-                viewModel.setLoading(false)
-                isProcessing = false
+                viewModel.appendLog("🤖 AI: $token")
             }
         }
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        runner.cancel()
     }
 }
