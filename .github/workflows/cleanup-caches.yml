@@ -1,0 +1,24 @@
+name: Cleanup caches on PR close
+on:
+  pull_request:
+    types:
+      - closed  # 当PR被关闭或合并时触发
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write  # 必须授予写权限才能删除缓存
+    steps:
+      - name: Delete all caches for this PR branch
+        run: |
+          # 获取当前PR分支下所有缓存的ID
+          cacheIds=$(gh cache list --ref $BRANCH --limit 100 --json id --jq '.[].id')
+          for id in $cacheIds; do
+            gh cache delete $id
+            echo "Deleted cache ID: $id"
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}  # 使用自动生成的GITHUB_TOKEN进行认证
+          GH_REPO: ${{ github.repository }}
+          BRANCH: refs/pull/${{ github.event.pull_request.number }}/merge
