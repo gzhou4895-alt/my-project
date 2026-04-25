@@ -3,41 +3,50 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="12dp">
+    android:padding="8dp">
 
-    <!-- 标题 -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="AI 聊天"
-        android:textSize="24sp" />
-
-    <!-- 输入框 -->
-    <EditText
-        android:id="@+id/input"
-        android:hint="输入内容"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
-
-    <!-- 按钮 -->
-    <Button
-        android:id="@+id/btnSend"
-        android:text="发送"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
-
-    <!-- 日志显示（重点🔥） -->
     <ScrollView
+        android:id="@+id/scrollView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:scrollbars="vertical">
 
         <TextView
             android:id="@+id/logView"
-            android:textSize="12sp"
-            android:paddingTop="8dp"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:padding="8dp"
+            android:textSize="16sp"
+            android:lineSpacingExtra="4dp" />
+
     </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <EditText
+            android:id="@+id/input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="输入消息..."
+            android:padding="12dp"
+            android:background="@android:drawable/editbox_background"
+            android:maxLines="4" />
+
+        <Button
+            android:id="@+id/btnSend"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="发送"
+            android:layout_marginStart="8dp"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp" />
+
+    </LinearLayout>
 
 </LinearLayout>
