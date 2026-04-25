@@ -33,23 +33,25 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
 
-    kotlinOptions {
-        jvmTarget = "17"
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
 dependencies {
 
     // =========================
-    // Android 基础依赖
+    // Android 基础
     // =========================
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
 
     // =========================
-    // Fragment + ViewModel（你 Chat 必须用）
+    // Fragment + ViewModel（Chat 必须）
     // =========================
     implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
@@ -58,10 +60,10 @@ dependencies {
     // =========================
     // Kotlin
     // =========================
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
 
     // =========================
-    // 🚀 LiteRT / TensorFlow Lite（重点）
+    // 🚀 LiteRT / TensorFlow Lite
     // =========================
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-api:2.14.0")
