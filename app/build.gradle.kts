@@ -1,17 +1,9 @@
-import java.util.Date
-import java.util.TimeZone
-import java.text.SimpleDateFormat
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    // 如果你有使用 Kotlin 序列化（Ktor 网关需要），请加上这一行
+    // id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
 }
-
-// 放在最外面确保全局可用
-val timestamp = SimpleDateFormat("yyyyMMdd_HHmm").apply {
-    timeZone = TimeZone.getTimeZone("GMT+08:00")
-}.format(Date())
 
 android {
     namespace = "com.example.hello"
@@ -23,27 +15,15 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // 强力改名逻辑：直接把 debug 默认名改了
     buildTypes {
-        getByName("debug") {
+        release {
             isMinifyEnabled = false
-            // 给 debug 版本增加一个后缀名，确保它不叫默认名字
-            setProperty("archivesBaseName", "AI_Helper_v1.0_$timestamp")
-        }
-        getByName("release") {
-            isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
-    }
-
-    // 第二重保险改名
-    applicationVariants.all {
-        outputs.all {
-            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output.outputFileName = "AI_Helper_v1.0_${timestamp}_${name}.apk"
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
@@ -51,12 +31,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-}
 
-// 编译器补丁
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_1_8)
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+
+    // 关键：防止模型文件在打包时被压缩，否则推理引擎无法读取
+    aaptOptions {
+        noCompress("tflite", "litertlm", "bin")
     }
 }
 
@@ -65,4 +47,19 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+
+    // 🔥 核心修复：添加 MediaPipe GenAI 库
+    // 这个库提供了 LlmInference 和 mediapipe 引用
+    implementation("com.google.mediapipe:tasks-genai:0.10.14")
+
+    // 🌐 Ktor 服务器相关依赖 (网关服务需要)
+    val ktor_version = "2.3.7"
+    implementation("io.ktor:ktor-server-core:$ktor_version")
+    implementation("io.ktor:ktor-server-netty:$ktor_version")
+    implementation("io.ktor:ktor-server-content-negotiation:$ktor_version")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
+
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
