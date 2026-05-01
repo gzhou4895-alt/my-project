@@ -3,6 +3,7 @@ package com.example.hello
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -18,41 +19,40 @@ class ModelsFragment : Fragment(R.layout.fragment_models) {
 
         downloadManager = ModelDownloadManager(requireContext())
 
+        val etHfToken = view.findViewById<EditText>(R.id.etHfToken)
         val btnDownload = view.findViewById<Button>(R.id.btnDownload)
         val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
-        // 核心修复：对应你的 XML 里的 ID: tvDownloadStatus
         val tvStatus = view.findViewById<TextView>(R.id.tvDownloadStatus)
 
-        // 替换为你真实的 Hugging Face 下载直链
-        val modelUrl = "https://huggingface.co/your-user/your-model/resolve/main/model.bin?download=true"
+        // 请务必使用 resolve 形式的直链
+        val modelUrl = "https://huggingface.co/google/gemma-2b-it/resolve/main/gemma-2b-it.bin?download=true"
         val fileName = "model.bin"
 
         btnDownload?.setOnClickListener {
-            // 点击后显示进度条和状态
+            val token = etHfToken?.text?.toString()?.trim()
+            
             progressBar?.visibility = View.VISIBLE
             tvStatus?.visibility = View.VISIBLE
             btnDownload.isEnabled = false
+            tvStatus?.text = "正在连接并验证 Token..."
             
-            tvStatus?.text = "Connecting..."
-            
-            downloadManager.downloadModel(modelUrl, fileName, object : ModelDownloadManager.DownloadCallback {
+            downloadManager.downloadModel(modelUrl, fileName, token, object : ModelDownloadManager.DownloadCallback {
                 override fun onProgress(progress: Int) {
                     progressBar?.progress = progress
-                    tvStatus?.text = "Downloading: $progress%"
+                    tvStatus?.text = "下载中: $progress%"
                 }
 
                 override fun onSuccess(file: File) {
-                    tvStatus?.text = "Success: ${file.name}"
+                    tvStatus?.text = "下载完成: ${file.name}"
                     btnDownload.isEnabled = true
-                    Toast.makeText(context, "Model ready!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "模型已就绪", Toast.LENGTH_SHORT).show()
                 }
 
                 override fun onFailure(e: Exception) {
-                    tvStatus?.text = "Error: ${e.message}"
+                    tvStatus?.text = "失败: ${e.message}"
                     btnDownload.isEnabled = true
-                    // 失败时隐藏进度条，方便用户重试
                     progressBar?.visibility = View.GONE
-                    Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "错误: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             })
         }
