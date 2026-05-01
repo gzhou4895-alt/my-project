@@ -25,38 +25,48 @@ class ModelDownloadManager(private val context: Context) {
     fun downloadModel(modelUrl: String, fileName: String, hfToken: String?, callback: DownloadCallback) {
         val targetFile = File(context.getExternalFilesDir(null), fileName)
 
-        // 增强逻辑：如果文件已经存在且超过 1GB，认为已经下载过了
-        if (targetFile.exists() && targetFile.length() > 1024 * 1024 * 1024) {
-            callback.onSuccess(targetFile)
-            return
-        }
-
         executor.execute {
             var connection: HttpURLConnection? = null
             try {
-                val url = URL(modelUrl)
-                connection = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 120000 
-                    readTimeout = 120000
-                    instanceFollowRedirects = true
-                    
-                    if (!hfToken.isNullOrBlank()) {
-                        setRequestProperty("Authorization", "Bearer $hfToken")
+                var currentUrl = modelUrl
+                var responseCode: Int
+                
+                // 循环处理重定向，防止 S3 节点跳转丢失 Token
+                var redirectCount = 0
+                while (true) {
+                    val url = URL(currentUrl)
+                    connection = (url.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 120000
+                        readTimeout = 120000
+                        instanceFollowRedirects = false // 手动处理防止 Header 丢失
+                        
+                        if (!hfToken.isNullOrBlank()) {
+                            setRequestProperty("Authorization", "Bearer $hfToken")
+                        }
+                        setRequestProperty("User-Agent", "Mozilla/5.0")
                     }
-                    
-                    setRequestProperty("User-Agent", "Mozilla/5.0")
-                    connect()
+
+                    responseCode = connection.responseCode
+                    // 如果是 301 或 302 重定向
+                    if (responseCode == 301 || responseCode == 302 || responseCode == 303 || responseCode == 307 || responseCode == 308) {
+                        currentUrl = connection.getHeaderField("Location")
+                        connection.disconnect()
+                        redirectCount++
+                        if (redirectCount > 5) throw Exception("重定向次数过多")
+                        continue
+                    }
+                    break
                 }
 
-                if (connection.responseCode == 401) {
-                    throw Exception("401: 请检查 Token 是否有权限下载此模型")
-                }
+                if (responseCode == 401) throw Exception("401 Unauthorized: Token 无效")
+                if (responseCode == 403) throw Exception("403 Forbidden: 请在 HF 网页点击 Accept License 接受协议")
+                if (responseCode != 200) throw Exception("HTTP 错误码: $responseCode")
 
-                val fileLength = connection.contentLength
+                val fileLength = connection!!.contentLength
                 val input = BufferedInputStream(connection.inputStream)
                 val output = FileOutputStream(targetFile)
 
-                val data = ByteArray(1024 * 16) // 提高到 16KB 缓冲区，下载更快
+                val data = ByteArray(1024 * 16)
                 var total: Long = 0
                 var count: Int
                 var lastProgress = 0
@@ -64,7 +74,6 @@ class ModelDownloadManager(private val context: Context) {
                 while (input.read(data).also { count = it } != -1) {
                     total += count
                     output.write(data, 0, count)
-
                     if (fileLength > 0) {
                         val progress = (total * 100 / fileLength).toInt()
                         if (progress != lastProgress) {
@@ -80,10 +89,7 @@ class ModelDownloadManager(private val context: Context) {
                 handler.post { callback.onSuccess(targetFile) }
 
             } catch (e: Exception) {
-                // 如果下载中断且文件不完整，删除它
-                if (targetFile.exists() && targetFile.length() < 1024) {
-                    targetFile.delete()
-                }
+                if (targetFile.exists()) targetFile.delete()
                 handler.post { callback.onFailure(e) }
             } finally {
                 connection?.disconnect()
