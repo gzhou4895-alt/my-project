@@ -22,18 +22,17 @@ object GemmaEngine {
                 val folder = context.getExternalFilesDir(null)
                 val modelFile = File(folder, "gemma-4-E2B-it.litertlm")
                 
-                if (!modelFile.exists()) {
-                    // 自动匹配目录下任何包含 gemma 的文件，防止文件名微差
-                    val files = folder?.listFiles()
-                    val foundFile = files?.find { it.name.contains("gemma", ignoreCase = true) }
-                    
-                    if (foundFile != null) {
-                        setupEngine(context, foundFile, callback)
-                    } else {
-                        callback(false)
-                    }
+                // 智能检测：如果文件名对不上，尝试自动匹配目录下任何包含 gemma 的文件
+                val finalFile = if (modelFile.exists()) {
+                    modelFile
                 } else {
-                    setupEngine(context, modelFile, callback)
+                    folder?.listFiles()?.find { it.name.contains("gemma", ignoreCase = true) }
+                }
+
+                if (finalFile != null && finalFile.exists()) {
+                    setupEngine(context, finalFile, callback)
+                } else {
+                    callback(false)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -42,19 +41,20 @@ object GemmaEngine {
         }
     }
 
-    // 注意：这个方法现在是在 initialize 外部定义的
     private fun setupEngine(context: Context, file: File, callback: (Boolean) -> Unit) {
         try {
-            val options = LlmInference.LlmInferenceOptions.builder()
+            // 使用最稳健的配置方式
+            val optionsBuilder = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(file.absolutePath)
-                // 如果运行依然失败，请试着把下面这行 .setDelegate 删掉，先用 CPU 测试
-                .setDelegate(LlmInference.LlmInferenceOptions.Delegate.GPU)
                 .setMaxTokens(1024)
                 .setTopK(40)
                 .setTemperature(0.7f)
-                .build()
 
-            llmInference = LlmInference.createFromOptions(context, options)
+            // 注意：如果编译依然报 Delegate 错误，直接删除下面这行 .setResultListener 及其后的逻辑
+            // 某些版本的 MediaPipe 会根据硬件自动选择最快的 Delegate (通常就是 GPU)
+            optionsBuilder.setResultListener { _, _ -> } 
+
+            llmInference = LlmInference.createFromOptions(context, optionsBuilder.build())
             callback(true)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -62,10 +62,9 @@ object GemmaEngine {
         }
     }
 
-    // 统一方法名，确保 ChatFragment 能找到
     fun getResponse(prompt: String): String {
         return try {
-            llmInference?.generateResponse(prompt) ?: "引擎尚未准备好"
+            llmInference?.generateResponse(prompt) ?: "引擎未就绪"
         } catch (e: Exception) {
             "推理出错: ${e.message}"
         }
