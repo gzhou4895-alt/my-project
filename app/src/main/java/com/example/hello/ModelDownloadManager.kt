@@ -24,61 +24,46 @@ class ModelDownloadManager(private val context: Context) {
     fun downloadModel(modelUrl: String, fileName: String, hfToken: String?, callback: DownloadCallback) {
         val targetFile = File(context.getExternalFilesDir(null), fileName)
 
+        // 【核心修改：文件保护逻辑】
+        // 如果文件存在且大于 1GB，说明模型已经搬运成功，直接回调成功，不准往下走
+        if (targetFile.exists() && targetFile.length() > 1024 * 1024 * 1024) {
+            handler.post { callback.onSuccess(targetFile) }
+            return
+        }
+
         executor.execute {
             var connection: HttpURLConnection? = null
             try {
-                // 处理 HF 的 S3 跳转
-                var finalUrl = modelUrl
-                var responseCode: Int
-                
-                // 最多尝试 5 次重定向
-                var redirects = 0
-                while (redirects < 5) {
-                    val url = URL(finalUrl)
-                    connection = (url.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 60000
-                        readTimeout = 60000
-                        instanceFollowRedirects = false // 手动处理以防丢失 Authorization
-                        
-                        if (!hfToken.isNullOrBlank()) {
-                            setRequestProperty("Authorization", "Bearer $hfToken")
-                        }
-                        setRequestProperty("User-Agent", "Mozilla/5.0")
+                val url = URL(modelUrl)
+                connection = (url.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 30000
+                    readTimeout = 30000
+                    instanceFollowRedirects = true
+                    if (!hfToken.isNullOrBlank()) {
+                        setRequestProperty("Authorization", "Bearer $hfToken")
                     }
-                    
-                    responseCode = connection!!.responseCode
-                    if (responseCode == 301 || responseCode == 302 || responseCode == 303 || responseCode == 307 || responseCode == 308) {
-                        finalUrl = connection!!.getHeaderField("Location")
-                        connection!!.disconnect()
-                        redirects++
-                    } else {
-                        break
-                    }
+                    setRequestProperty("User-Agent", "Mozilla/5.0")
                 }
 
-                responseCode = connection!!.responseCode
+                val responseCode = connection.responseCode
                 if (responseCode != 200) {
-                    throw Exception("HTTP $responseCode: 路径可能错误或未授权。请确认网页已接受协议。")
+                    throw Exception("HTTP $responseCode: 无法连接服务器")
                 }
 
-                val fileLength = connection!!.contentLength
-                val input = BufferedInputStream(connection!!.inputStream)
+                val fileLength = connection.contentLength
+                val input = BufferedInputStream(connection.inputStream)
                 val output = FileOutputStream(targetFile)
 
                 val data = ByteArray(1024 * 32)
                 var total: Long = 0
                 var count: Int
-                var lastProgress = 0
-
+                
                 while (input.read(data).also { count = it } != -1) {
                     total += count
                     output.write(data, 0, count)
                     if (fileLength > 0) {
                         val progress = (total * 100 / fileLength).toInt()
-                        if (progress != lastProgress) {
-                            lastProgress = progress
-                            handler.post { callback.onProgress(progress) }
-                        }
+                        handler.post { callback.onProgress(progress) }
                     }
                 }
 
@@ -88,7 +73,10 @@ class ModelDownloadManager(private val context: Context) {
                 handler.post { callback.onSuccess(targetFile) }
 
             } catch (e: Exception) {
-                if (targetFile.exists()) targetFile.delete()
+                // 【核心修改：只在文件极小时（下载失败的残片）才删除】
+                if (targetFile.exists() && targetFile.length() < 1024 * 1024) {
+                    targetFile.delete()
+                }
                 handler.post { callback.onFailure(e) }
             } finally {
                 connection?.disconnect()
