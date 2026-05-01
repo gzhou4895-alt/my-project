@@ -53,17 +53,15 @@ android {
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 
-    // --- 这里是修复报错的关键修改 ---
-    kotlinOptions {
-        // 使用这种方式来规避编译器对直接赋值的拦截
-        (this as org.jetbrains.kotlin.gradle.tasks.KotlinCompile).kotlinOptions {
-            jvmTarget = "1.8"
-        }
-    }
-    // ----------------------------
-
     buildFeatures {
         compose = false
+    }
+}
+
+// 采用最现代化的方式设置 JVM 目标，彻底解决 compilerOptions 报错
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    kotlinOptions {
+        jvmTarget = "1.8"
     }
 }
 
