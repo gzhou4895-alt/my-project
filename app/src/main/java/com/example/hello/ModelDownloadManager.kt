@@ -25,8 +25,8 @@ class ModelDownloadManager(private val context: Context) {
     fun downloadModel(modelUrl: String, fileName: String, hfToken: String?, callback: DownloadCallback) {
         val targetFile = File(context.getExternalFilesDir(null), fileName)
 
-        // 文件存在检查
-        if (targetFile.exists() && targetFile.length() > 1024 * 1024 * 10) {
+        // 增强逻辑：如果文件已经存在且超过 1GB，认为已经下载过了
+        if (targetFile.exists() && targetFile.length() > 1024 * 1024 * 1024) {
             callback.onSuccess(targetFile)
             return
         }
@@ -40,29 +40,23 @@ class ModelDownloadManager(private val context: Context) {
                     readTimeout = 120000
                     instanceFollowRedirects = true
                     
-                    // 核心：处理 401 授权
                     if (!hfToken.isNullOrBlank()) {
                         setRequestProperty("Authorization", "Bearer $hfToken")
                     }
                     
                     setRequestProperty("User-Agent", "Mozilla/5.0")
-                    setRequestProperty("Accept-Encoding", "identity")
                     connect()
                 }
 
                 if (connection.responseCode == 401) {
-                    throw Exception("401 Unauthorized: 需要有效的 HF Token")
-                }
-
-                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                    throw Exception("HTTP Error: ${connection.responseCode}")
+                    throw Exception("401: 请检查 Token 是否有权限下载此模型")
                 }
 
                 val fileLength = connection.contentLength
                 val input = BufferedInputStream(connection.inputStream)
                 val output = FileOutputStream(targetFile)
 
-                val data = ByteArray(1024 * 8)
+                val data = ByteArray(1024 * 16) // 提高到 16KB 缓冲区，下载更快
                 var total: Long = 0
                 var count: Int
                 var lastProgress = 0
@@ -86,7 +80,10 @@ class ModelDownloadManager(private val context: Context) {
                 handler.post { callback.onSuccess(targetFile) }
 
             } catch (e: Exception) {
-                if (targetFile.exists()) targetFile.delete()
+                // 如果下载中断且文件不完整，删除它
+                if (targetFile.exists() && targetFile.length() < 1024) {
+                    targetFile.delete()
+                }
                 handler.post { callback.onFailure(e) }
             } finally {
                 connection?.disconnect()
