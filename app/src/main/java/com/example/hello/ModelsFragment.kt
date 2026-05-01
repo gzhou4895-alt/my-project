@@ -24,7 +24,7 @@ class ModelsFragment : Fragment(R.layout.fragment_models) {
         val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
         val tvStatus = view.findViewById<TextView>(R.id.tvDownloadStatus)
 
-        // 【最精准 URL 修复】
+        // 依然保留 URL 以防万一，但重点是 fileName
         val modelUrl = "https://huggingface.co/google/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm?download=true" 
         val fileName = "gemma-4-E2B-it.litertlm"
 
@@ -34,7 +34,7 @@ class ModelsFragment : Fragment(R.layout.fragment_models) {
             progressBar?.visibility = View.VISIBLE
             tvStatus?.visibility = View.VISIBLE
             btnDownload.isEnabled = false
-            tvStatus?.text = "连接中 (正在定位官方 LFS 文件)..."
+            tvStatus?.text = "正在检测本地文件..."
             
             downloadManager.downloadModel(
                 modelUrl, 
@@ -43,21 +43,20 @@ class ModelsFragment : Fragment(R.layout.fragment_models) {
                 object : ModelDownloadManager.DownloadCallback {
                     override fun onProgress(progress: Int) {
                         progressBar?.progress = progress
-                        tvStatus?.text = "下载进度: $progress%"
+                        tvStatus?.text = "正在下载: $progress%"
                     }
 
                     override fun onSuccess(file: File) {
-                        tvStatus?.text = "下载成功！文件已存入私有目录"
+                        tvStatus?.text = "状态：模型已就绪 (本地文件)"
                         btnDownload.isEnabled = true
-                        Toast.makeText(context, "模型已就绪", Toast.LENGTH_SHORT).show()
+                        progressBar?.progress = 100
+                        Toast.makeText(context, "检测到本地模型，加载成功！", Toast.LENGTH_SHORT).show()
                     }
 
                     override fun onFailure(e: Exception) {
-                        // 显示完整错误信息以便调试
-                        tvStatus?.text = "错误详情: ${e.message}"
+                        tvStatus?.text = "无法下载且本地无文件: ${e.message}"
                         btnDownload.isEnabled = true
-                        // 404 往往是路径问题，403 是没点协议，401 是 Token 错
-                        Toast.makeText(context, "操作失败，请看提示", Toast.LENGTH_LONG).show()
+                        progressBar?.visibility = View.GONE
                     }
                 }
             )
