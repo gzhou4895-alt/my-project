@@ -17,66 +17,57 @@ class ModelDownloadManager(private val context: Context) {
         onProgress: suspend (Int) -> Unit,
         onError: suspend (String) -> Unit
     ) = withContext(Dispatchers.IO) {
-        var connection: HttpURLConnection? = null
-        var inputStream: InputStream? = null
-        var outputStream: FileOutputStream? = null
-
-        try {
-            // 路径逻辑：即便没内存卡，也强制使用手机自带 512G 的安全目录
+        // 使用 Kotlin 的安全调用，防止任何意外崩溃
+        kotlin.runCatching {
             val targetDir = context.getExternalFilesDir(null) ?: context.filesDir
-            if (!targetDir.exists()) {
-                targetDir.mkdirs()
-            }
+            if (!targetDir.exists()) targetDir.mkdirs()
             
             val outputFile = File(targetDir, fileName)
-            // 如果存在旧文件先删除，防止“文件已存在”导致的无法写入闪退
-            if (outputFile.exists()) { outputFile.delete() }
+            if (outputFile.exists()) outputFile.delete()
 
             val url = URL(urlString)
-            connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 20000
-            connection.readTimeout = 20000
-            connection.instanceFollowRedirects = true // 允许重定向
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 20000
+                readTimeout = 20000
+                instanceFollowRedirects = true
+            }
+            
             connection.connect()
 
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                onError("服务器拒绝(${connection.responseCode})")
-                return@withContext
+                throw Exception("服务器错误: ${connection.responseCode}")
             }
 
             val fileLength = connection.contentLengthLong
-            inputStream = connection.inputStream
-            outputStream = FileOutputStream(outputFile)
+            val inputStream = connection.inputStream
+            val outputStream = FileOutputStream(outputFile)
 
-            val buffer = ByteArray(1024 * 16) // 16KB 缓冲区
+            val buffer = ByteArray(1024 * 16)
             var totalBytesRead = 0L
             var bytesRead: Int
 
-            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                outputStream.write(buffer, 0, bytesRead)
-                totalBytesRead += bytesRead
-                
-                if (fileLength > 0) {
-                    val progress = (totalBytesRead * 100 / fileLength).toInt()
-                    onProgress(progress)
-                } else {
-                    onProgress(-1)
+            inputStream.use { input ->
+                outputStream.use { output ->
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        totalBytesRead += bytesRead
+                        
+                        if (fileLength > 0) {
+                            val progress = (totalBytesRead * 100 / fileLength).toInt()
+                            // 切回主线程安全回调
+                            withContext(Dispatchers.Main) { onProgress(progress) }
+                        }
+                    }
                 }
             }
+            withContext(Dispatchers.Main) { onProgress(100) }
+            connection.disconnect()
 
-            outputStream.flush()
-            onProgress(100)
-
-        } catch (e: Exception) {
-            e.printStackTrace()
-            onError(e.localizedMessage ?: "未知网络错误")
-        } finally {
-            // 彻底关闭所有连接，防止内存溢出
-            try {
-                outputStream?.close()
-                inputStream?.close()
-                connection?.disconnect()
-            } catch (e: Exception) {}
+        }.onFailure { e ->
+            // 如果发生任何异常，捕获它并显示错误，而不是闪退
+            withContext(Dispatchers.Main) {
+                onError(e.localizedMessage ?: "下载引擎崩溃")
+            }
         }
     }
 }
