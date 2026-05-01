@@ -8,6 +8,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// 确保时间获取函数正确
 fun releaseTime(): String {
     val df = SimpleDateFormat("yyyyMMdd_HHmm")
     df.timeZone = TimeZone.getTimeZone("GMT+08:00")
@@ -41,11 +42,14 @@ android {
         }
     }
 
+    // --- 强力重命名方案 (KTS 专用) ---
     applicationVariants.all {
         val variant = this
         variant.outputs.all {
             val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output.outputFileName = "AI_Helper_v${variant.versionName}_${releaseTime()}_${variant.buildType.name}.apk"
+            val time = releaseTime()
+            // 结果示例: AI_Helper_v1.0_20260501_2130_debug.apk
+            output.outputFileName = "AI_Helper_v${variant.versionName}_${time}_${variant.buildType.name}.apk"
         }
     }
 
@@ -59,7 +63,7 @@ android {
     }
 }
 
-// 终极修复：使用最新的 compilerOptions DSL，彻底告别 kotlinOptions
+// 保持之前的编译器修复
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_1_8)
