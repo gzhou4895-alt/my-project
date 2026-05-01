@@ -24,9 +24,9 @@ class ModelsFragment : Fragment(R.layout.fragment_models) {
         val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
         val tvStatus = view.findViewById<TextView>(R.id.tvDownloadStatus)
 
-        // 修改点：对齐你给出的文件名
-        val modelUrl = "https://huggingface.co/google/gemma-2b-it-litert/resolve/main/2b-it-gpu-int4.bin?download=true" 
-        val fileName = "Gemma-4-E2B-it-litert-lm.bin" // 加上 .bin 后缀方便系统识别
+        // 尝试使用这个更标准的 Google 官方 LITE RT 路径
+        val modelUrl = "https://huggingface.co/google/gemma-2b-it-litert/resolve/main/gemma-2b-it-gpu-int4.bin?download=true" 
+        val fileName = "Gemma-4-E2B-it-litert-lm.bin"
 
         btnDownload?.setOnClickListener {
             val token = etHfToken?.text?.toString()?.trim()
@@ -34,7 +34,7 @@ class ModelsFragment : Fragment(R.layout.fragment_models) {
             progressBar?.visibility = View.VISIBLE
             tvStatus?.visibility = View.VISIBLE
             btnDownload.isEnabled = false
-            tvStatus?.text = "正在连接服务器..."
+            tvStatus?.text = "正在连接 Hugging Face..."
             
             downloadManager.downloadModel(
                 modelUrl, 
@@ -43,17 +43,18 @@ class ModelsFragment : Fragment(R.layout.fragment_models) {
                 object : ModelDownloadManager.DownloadCallback {
                     override fun onProgress(progress: Int) {
                         progressBar?.progress = progress
-                        tvStatus?.text = "正在下载: $progress%"
+                        tvStatus?.text = "下载进度: $progress%"
                     }
 
                     override fun onSuccess(file: File) {
-                        tvStatus?.text = "下载成功！文件存放在私有目录"
+                        tvStatus?.text = "下载成功！已保存至：${file.name}"
                         btnDownload.isEnabled = true
-                        Toast.makeText(context, "模型 ${file.name} 已就绪", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "模型已就绪", Toast.LENGTH_SHORT).show()
                     }
 
                     override fun onFailure(e: Exception) {
-                        tvStatus?.text = "下载失败: ${e.message}"
+                        // 这里会显示具体的 HTTP 错误码
+                        tvStatus?.text = "下载失败详情: ${e.message}"
                         btnDownload.isEnabled = true
                         progressBar?.visibility = View.GONE
                         Toast.makeText(context, "错误: ${e.message}", Toast.LENGTH_LONG).show()
