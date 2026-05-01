@@ -22,12 +22,11 @@ class ModelDownloadManager(private val context: Context) {
         fun onFailure(e: Exception)
     }
 
-    fun downloadModel(modelUrl: String, fileName: String, callback: DownloadCallback) {
-        // 使用 getExternalFilesDir，这样不需要额外申请存储权限，Android 14 也稳
+    fun downloadModel(modelUrl: String, fileName: String, hfToken: String?, callback: DownloadCallback) {
         val targetFile = File(context.getExternalFilesDir(null), fileName)
 
-        // 如果文件已经存在，直接返回成功
-        if (targetFile.exists() && targetFile.length() > 1024 * 1024) {
+        // 文件存在检查
+        if (targetFile.exists() && targetFile.length() > 1024 * 1024 * 10) {
             callback.onSuccess(targetFile)
             return
         }
@@ -35,20 +34,28 @@ class ModelDownloadManager(private val context: Context) {
         executor.execute {
             var connection: HttpURLConnection? = null
             try {
-                Log.d("Download", "Starting download from: $modelUrl")
                 val url = URL(modelUrl)
                 connection = (url.openConnection() as HttpURLConnection).apply {
-                    // 马来西亚环境加固：给足握手时间
                     connectTimeout = 120000 
                     readTimeout = 120000
                     instanceFollowRedirects = true
-                    setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                    
+                    // 核心：处理 401 授权
+                    if (!hfToken.isNullOrBlank()) {
+                        setRequestProperty("Authorization", "Bearer $hfToken")
+                    }
+                    
+                    setRequestProperty("User-Agent", "Mozilla/5.0")
                     setRequestProperty("Accept-Encoding", "identity")
                     connect()
                 }
 
+                if (connection.responseCode == 401) {
+                    throw Exception("401 Unauthorized: 需要有效的 HF Token")
+                }
+
                 if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                    throw Exception("Server returned HTTP ${connection.responseCode}")
+                    throw Exception("HTTP Error: ${connection.responseCode}")
                 }
 
                 val fileLength = connection.contentLength
@@ -64,7 +71,6 @@ class ModelDownloadManager(private val context: Context) {
                     total += count
                     output.write(data, 0, count)
 
-                    // 计算进度
                     if (fileLength > 0) {
                         val progress = (total * 100 / fileLength).toInt()
                         if (progress != lastProgress) {
@@ -77,12 +83,9 @@ class ModelDownloadManager(private val context: Context) {
                 output.flush()
                 output.close()
                 input.close()
-
                 handler.post { callback.onSuccess(targetFile) }
 
             } catch (e: Exception) {
-                Log.e("Download", "Download failed: ${e.message}")
-                // 失败了就把残缺的文件删掉，防止下次进来以为下好了
                 if (targetFile.exists()) targetFile.delete()
                 handler.post { callback.onFailure(e) }
             } finally {
