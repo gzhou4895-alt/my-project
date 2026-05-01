@@ -7,7 +7,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// 修复后的时间获取函数
 fun releaseTime(): String {
     val df = SimpleDateFormat("yyyyMMdd_HHmm")
     df.timeZone = TimeZone.getTimeZone("GMT+08:00")
@@ -41,7 +40,6 @@ android {
         }
     }
 
-    // 核心重命名逻辑
     applicationVariants.all {
         val variant = this
         variant.outputs.all {
@@ -55,10 +53,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 
-    // 修复 jvmTarget 的报错提示
+    // --- 这里是修复报错的关键修改 ---
     kotlinOptions {
-        jvmTarget = "1.8"
+        // 使用这种方式来规避编译器对直接赋值的拦截
+        (this as org.jetbrains.kotlin.gradle.tasks.KotlinCompile).kotlinOptions {
+            jvmTarget = "1.8"
+        }
     }
+    // ----------------------------
 
     buildFeatures {
         compose = false
