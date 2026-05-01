@@ -4,79 +4,52 @@ import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import java.util.concurrent.Executors
+import java.io.File
 
-class ChatFragment : Fragment(R.layout.fragment_chat) {
+class ModelsFragment : Fragment(R.layout.fragment_models) {
 
-    private val messages = mutableListOf<ChatMessage>()
-    private lateinit var adapter: ChatAdapter
-    private lateinit var tvStatus: TextView
-    private lateinit var rvMessages: RecyclerView
-    private val uiExecutor = Executors.newSingleThreadExecutor()
+    private lateinit var downloadManager: ModelDownloadManager
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        downloadManager = ModelDownloadManager(requireContext())
 
-        tvStatus = view.findViewById(R.id.tvChatStatus)
-        rvMessages = view.findViewById(R.id.rvMessages)
-        val etInput = view.findViewById<EditText>(R.id.etInput)
-        val btnSend = view.findViewById<Button>(R.id.btnSend)
+        val etHfToken = view.findViewById<EditText>(R.id.etHfToken)
+        val btnDownload = view.findViewById<Button>(R.id.btnDownload)
+        val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
+        val tvStatus = view.findViewById<TextView>(R.id.tvDownloadStatus)
 
-        // 初始化 RecyclerView
-        adapter = ChatAdapter(messages)
-        rvMessages.layoutManager = LinearLayoutManager(context)
-        rvMessages.adapter = adapter
+        val modelUrl = "https://huggingface.co/google/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm?download=true"
+        val fileName = "gemma-4-E2B-it.litertlm"
 
-        // --- 核心：初始化或获取已有的 GPU 引擎 ---
-        tvStatus.text = "正在检测 GPU 资源并加载模型..."
-        GemmaEngine.initialize(requireContext()) { success ->
-            activity?.runOnUiThread {
-                if (success) {
-                    tvStatus.text = "✅ GPU 加速已就绪 (12GB RAM 已适配)"
-                } else {
-                    tvStatus.text = "❌ 模型加载失败，请检查文件是否存在"
-                }
-            }
-        }
-
-        btnSend.setOnClickListener {
-            val prompt = etInput.text.toString().trim()
-            if (prompt.isNotEmpty()) {
-                if (!GemmaEngine.isReady()) {
-                    tvStatus.text = "请稍候，引擎正在热身..."
-                    return@setOnClickListener
+        btnDownload?.setOnClickListener {
+            val token = etHfToken?.text?.toString()?.trim()
+            progressBar?.visibility = View.VISIBLE
+            tvStatus?.visibility = View.VISIBLE
+            btnDownload.isEnabled = false
+            tvStatus?.text = "正在检查本地资源..."
+            
+            downloadManager.downloadModel(modelUrl, fileName, token, object : ModelDownloadManager.DownloadCallback {
+                override fun onProgress(progress: Int) {
+                    progressBar?.progress = progress
+                    tvStatus?.text = "进度: $progress%"
                 }
 
-                // 添加用户消息到 UI
-                addMessage(prompt, true)
-                etInput.text.clear()
-                
-                tvStatus.text = "Gemma 正在思考 (GPU)..."
-                btnSend.isEnabled = false
-
-                // 在后台线程执行推理，防止界面卡死
-                uiExecutor.execute {
-                    val response = GemmaEngine.getResponse(prompt)
-                    activity?.runOnUiThread {
-                        addMessage(response, false)
-                        tvStatus.text = "✅ GPU 加速已就绪"
-                        btnSend.isEnabled = true
-                    }
+                override fun onSuccess(file: File) {
+                    tvStatus?.text = "✅ 模型已就绪"
+                    btnDownload.isEnabled = true
+                    Toast.makeText(context, "加载成功！", Toast.LENGTH_SHORT).show()
                 }
-            }
+
+                override fun onFailure(e: Exception) {
+                    tvStatus?.text = "提示: ${e.message}"
+                    btnDownload.isEnabled = true
+                }
+            })
         }
     }
-
-    private fun addMessage(text: String, isUser: Boolean) {
-        messages.add(ChatMessage(text, isUser))
-        adapter.notifyItemInserted(messages.size - 1)
-        rvMessages.scrollToPosition(messages.size - 1)
-    }
-
-    // 注意：如果是作为网关服务器，不要在 Fragment 销毁时 close 引擎
-    // 建议在整个 App 退出时才释放资源
 }
