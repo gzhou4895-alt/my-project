@@ -8,12 +8,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// 确保时间获取函数正确
-fun releaseTime(): String {
-    val df = SimpleDateFormat("yyyyMMdd_HHmm")
-    df.timeZone = TimeZone.getTimeZone("GMT+08:00")
-    return df.format(Date())
-}
+// 放在最外面确保全局可用
+val timestamp = SimpleDateFormat("yyyyMMdd_HHmm").apply {
+    timeZone = TimeZone.getTimeZone("GMT+08:00")
+}.format(Date())
 
 android {
     namespace = "com.example.hello"
@@ -25,31 +23,27 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
     }
 
+    // 强力改名逻辑：直接把 debug 默认名改了
     buildTypes {
+        getByName("debug") {
+            isMinifyEnabled = false
+            // 给 debug 版本增加一个后缀名，确保它不叫默认名字
+            setProperty("archivesBaseName", "AI_Helper_v1.0_$timestamp")
+        }
         getByName("release") {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
-        getByName("debug") {
-            isMinifyEnabled = false
-        }
     }
 
-    // --- 强力重命名方案 (KTS 专用) ---
+    // 第二重保险改名
     applicationVariants.all {
-        val variant = this
-        variant.outputs.all {
+        outputs.all {
             val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            val time = releaseTime()
-            // 结果示例: AI_Helper_v1.0_20260501_2130_debug.apk
-            output.outputFileName = "AI_Helper_v${variant.versionName}_${time}_${variant.buildType.name}.apk"
+            output.outputFileName = "AI_Helper_v1.0_${timestamp}_${name}.apk"
         }
     }
 
@@ -57,13 +51,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-
-    buildFeatures {
-        compose = false
-    }
 }
 
-// 保持之前的编译器修复
+// 编译器补丁
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_1_8)
@@ -75,7 +65,4 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
