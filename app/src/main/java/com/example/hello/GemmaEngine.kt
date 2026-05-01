@@ -2,7 +2,6 @@ package com.example.hello
 
 import android.content.Context
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
-import com.google.mediapipe.tasks.core.Delegate // 显式导入 Delegate
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -19,54 +18,61 @@ object GemmaEngine {
         }
 
         executor.execute {
-    try {
-        // 1. 获取 Android 标准的 files 目录
-        val folder = context.getExternalFilesDir(null)
-        val modelFile = File(folder, "gemma-4-E2B-it.litertlm")
-        
-        // 打印出代码实际寻找的路径（你可以在 Logcat 中看到它）
-        println("AI_DEBUG: 正在寻找模型: ${modelFile.absolutePath}")
-
-        if (!modelFile.exists()) {
-            // 2. 备选方案：如果上面的路径找不到，尝试列出目录下所有文件，看看是不是文件名多了后缀
-            val files = folder?.listFiles()
-            val foundFile = files?.find { it.name.contains("gemma", ignoreCase = true) }
-            
-            if (foundFile != null) {
-                println("AI_DEBUG: 自动匹配到文件: ${foundFile.absolutePath}")
-                setupEngine(context, foundFile, callback)
-            } else {
-                println("AI_DEBUG: 目录下没有任何包含 gemma 的文件")
+            try {
+                val folder = context.getExternalFilesDir(null)
+                val modelFile = File(folder, "gemma-4-E2B-it.litertlm")
+                
+                if (!modelFile.exists()) {
+                    // 自动匹配目录下任何包含 gemma 的文件，防止文件名微差
+                    val files = folder?.listFiles()
+                    val foundFile = files?.find { it.name.contains("gemma", ignoreCase = true) }
+                    
+                    if (foundFile != null) {
+                        setupEngine(context, foundFile, callback)
+                    } else {
+                        callback(false)
+                    }
+                } else {
+                    setupEngine(context, modelFile, callback)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
                 callback(false)
             }
-            return@execute
         }
-
-        // 3. 文件存在，正常初始化
-        setupEngine(context, modelFile, callback)
-
-    } catch (e: Exception) {
-        println("AI_DEBUG: 引擎启动发生崩溃: ${e.message}")
-        e.printStackTrace()
-        callback(false)
     }
-}
 
-// 提取出的配置方法
-private fun setupEngine(context: Context, file: File, callback: (Boolean) -> Unit) {
-    try {
-        val options = LlmInference.LlmInferenceOptions.builder()
-            .setModelPath(file.absolutePath)
-            // 如果 GPU 报错，请尝试将下面这行改为 .setDelegate(LlmInference.LlmInferenceOptions.Delegate.CPU)
-            .setDelegate(LlmInference.LlmInferenceOptions.Delegate.GPU)
-            .setMaxTokens(1024)
-            .setTopK(40)
-            .setTemperature(0.7f)
-            .build()
+    // 注意：这个方法现在是在 initialize 外部定义的
+    private fun setupEngine(context: Context, file: File, callback: (Boolean) -> Unit) {
+        try {
+            val options = LlmInference.LlmInferenceOptions.builder()
+                .setModelPath(file.absolutePath)
+                // 如果运行依然失败，请试着把下面这行 .setDelegate 删掉，先用 CPU 测试
+                .setDelegate(LlmInference.LlmInferenceOptions.Delegate.GPU)
+                .setMaxTokens(1024)
+                .setTopK(40)
+                .setTemperature(0.7f)
+                .build()
 
-        llmInference = LlmInference.createFromOptions(context, options)
-        callback(true)
-    } catch (e: Exception) {
-        callback(false)
+            llmInference = LlmInference.createFromOptions(context, options)
+            callback(true)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            callback(false)
+        }
+    }
+
+    // 统一方法名，确保 ChatFragment 能找到
+    fun getResponse(prompt: String): String {
+        return try {
+            llmInference?.generateResponse(prompt) ?: "引擎尚未准备好"
+        } catch (e: Exception) {
+            "推理出错: ${e.message}"
+        }
+    }
+
+    fun close() {
+        llmInference?.close()
+        llmInference = null
     }
 }
