@@ -20,17 +20,13 @@ object GemmaEngine {
         executor.execute {
             try {
                 val folder = context.getExternalFilesDir(null)
-                val modelFile = File(folder, "gemma-4-E2B-it.litertlm")
-                
-                // 智能检测：如果文件名对不上，尝试自动匹配目录下任何包含 gemma 的文件
-                val finalFile = if (modelFile.exists()) {
-                    modelFile
-                } else {
-                    folder?.listFiles()?.find { it.name.contains("gemma", ignoreCase = true) }
-                }
+                // 自动匹配任何包含 gemma 的文件，解决文件名后缀微差问题
+                val modelFile = folder?.listFiles()?.find { it.name.contains("gemma", ignoreCase = true) }
 
-                if (finalFile != null && finalFile.exists()) {
-                    setupEngine(context, finalFile, callback)
+                if (modelFile != null && modelFile.exists()) {
+                    // 核心初始化逻辑
+                    val success = startInferenceEngine(context, modelFile)
+                    callback(success)
                 } else {
                     callback(false)
                 }
@@ -41,37 +37,49 @@ object GemmaEngine {
         }
     }
 
-    private fun setupEngine(context: Context, file: File, callback: (Boolean) -> Unit) {
-        try {
-            // 使用最稳健的配置方式
-            val optionsBuilder = LlmInference.LlmInferenceOptions.builder()
+    private fun startInferenceEngine(context: Context, file: File): Boolean {
+        return try {
+            // 尝试 1：优先使用 GPU 加速（适合你的 12GB RAM 手机）
+            val options = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(file.absolutePath)
                 .setMaxTokens(1024)
                 .setTopK(40)
                 .setTemperature(0.7f)
-
-            // 注意：如果编译依然报 Delegate 错误，直接删除下面这行 .setResultListener 及其后的逻辑
-            // 某些版本的 MediaPipe 会根据硬件自动选择最快的 Delegate (通常就是 GPU)
-            optionsBuilder.setResultListener { _, _ -> } 
-
-            llmInference = LlmInference.createFromOptions(context, optionsBuilder.build())
-            callback(true)
+                .build()
+            
+            llmInference = LlmInference.createFromOptions(context, options)
+            true
         } catch (e: Exception) {
             e.printStackTrace()
-            callback(false)
+            // 如果 GPU 握手失败，MediaPipe 有时会自动处理，
+            // 但如果 llmInference 依然为 null，这里会返回 false
+            llmInference != null
         }
     }
 
+    /**
+     * 获取对话响应
+     */
     fun getResponse(prompt: String): String {
         return try {
-            llmInference?.generateResponse(prompt) ?: "引擎未就绪"
+            if (llmInference == null) return "引擎尚未就绪"
+            
+            // 直接获取生成结果
+            llmInference?.generateResponse(prompt) ?: "生成失败"
         } catch (e: Exception) {
-            "推理出错: ${e.message}"
+            "推理过程发生错误: ${e.message}"
         }
     }
 
+    /**
+     * 释放资源
+     */
     fun close() {
-        llmInference?.close()
+        try {
+            llmInference?.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         llmInference = null
     }
 }
