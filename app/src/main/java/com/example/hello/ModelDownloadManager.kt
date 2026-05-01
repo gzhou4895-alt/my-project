@@ -1,72 +1,92 @@
 package com.example.hello
 
 import android.content.Context
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.Executors
 
 class ModelDownloadManager(private val context: Context) {
 
-    suspend fun downloadModel(
-        urlString: String,
-        fileName: String,
-        onProgress: suspend (Int) -> Unit,
-        onError: suspend (String) -> Unit
-    ) = withContext(Dispatchers.IO) {
-        // 使用 Kotlin 的安全调用，防止任何意外崩溃
-        kotlin.runCatching {
-            val targetDir = context.getExternalFilesDir(null) ?: context.filesDir
-            if (!targetDir.exists()) targetDir.mkdirs()
-            
-            val outputFile = File(targetDir, fileName)
-            if (outputFile.exists()) outputFile.delete()
+    private val executor = Executors.newSingleThreadExecutor()
+    private val handler = Handler(Looper.getMainLooper())
 
-            val url = URL(urlString)
-            val connection = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 20000
-                readTimeout = 20000
-                instanceFollowRedirects = true
-            }
-            
-            connection.connect()
+    interface DownloadCallback {
+        fun onProgress(progress: Int)
+        fun onSuccess(file: File)
+        fun onFailure(e: Exception)
+    }
 
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                throw Exception("服务器错误: ${connection.responseCode}")
-            }
+    fun downloadModel(modelUrl: String, fileName: String, callback: DownloadCallback) {
+        // 使用 getExternalFilesDir，这样不需要额外申请存储权限，Android 14 也稳
+        val targetFile = File(context.getExternalFilesDir(null), fileName)
 
-            val fileLength = connection.contentLengthLong
-            val inputStream = connection.inputStream
-            val outputStream = FileOutputStream(outputFile)
+        // 如果文件已经存在，直接返回成功
+        if (targetFile.exists() && targetFile.length() > 1024 * 1024) {
+            callback.onSuccess(targetFile)
+            return
+        }
 
-            val buffer = ByteArray(1024 * 16)
-            var totalBytesRead = 0L
-            var bytesRead: Int
+        executor.execute {
+            var connection: HttpURLConnection? = null
+            try {
+                Log.d("Download", "Starting download from: $modelUrl")
+                val url = URL(modelUrl)
+                connection = (url.openConnection() as HttpURLConnection).apply {
+                    // 马来西亚环境加固：给足握手时间
+                    connectTimeout = 120000 
+                    readTimeout = 120000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                    setRequestProperty("Accept-Encoding", "identity")
+                    connect()
+                }
 
-            inputStream.use { input ->
-                outputStream.use { output ->
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalBytesRead += bytesRead
-                        
-                        if (fileLength > 0) {
-                            val progress = (totalBytesRead * 100 / fileLength).toInt()
-                            // 切回主线程安全回调
-                            withContext(Dispatchers.Main) { onProgress(progress) }
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    throw Exception("Server returned HTTP ${connection.responseCode}")
+                }
+
+                val fileLength = connection.contentLength
+                val input = BufferedInputStream(connection.inputStream)
+                val output = FileOutputStream(targetFile)
+
+                val data = ByteArray(1024 * 8)
+                var total: Long = 0
+                var count: Int
+                var lastProgress = 0
+
+                while (input.read(data).also { count = it } != -1) {
+                    total += count
+                    output.write(data, 0, count)
+
+                    // 计算进度
+                    if (fileLength > 0) {
+                        val progress = (total * 100 / fileLength).toInt()
+                        if (progress != lastProgress) {
+                            lastProgress = progress
+                            handler.post { callback.onProgress(progress) }
                         }
                     }
                 }
-            }
-            withContext(Dispatchers.Main) { onProgress(100) }
-            connection.disconnect()
 
-        }.onFailure { e ->
-            // 如果发生任何异常，捕获它并显示错误，而不是闪退
-            withContext(Dispatchers.Main) {
-                onError(e.localizedMessage ?: "下载引擎崩溃")
+                output.flush()
+                output.close()
+                input.close()
+
+                handler.post { callback.onSuccess(targetFile) }
+
+            } catch (e: Exception) {
+                Log.e("Download", "Download failed: ${e.message}")
+                // 失败了就把残缺的文件删掉，防止下次进来以为下好了
+                if (targetFile.exists()) targetFile.delete()
+                handler.post { callback.onFailure(e) }
+            } finally {
+                connection?.disconnect()
             }
         }
     }
