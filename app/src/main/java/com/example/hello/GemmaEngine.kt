@@ -19,32 +19,54 @@ object GemmaEngine {
         }
 
         executor.execute {
-            try {
-                val modelFile = File(context.getExternalFilesDir(null), "gemma-4-E2B-it.litertlm")
-                if (!modelFile.exists()) {
-                    callback(false)
-                    return@execute
-                }
+    try {
+        // 1. 获取 Android 标准的 files 目录
+        val folder = context.getExternalFilesDir(null)
+        val modelFile = File(folder, "gemma-4-E2B-it.litertlm")
+        
+        // 打印出代码实际寻找的路径（你可以在 Logcat 中看到它）
+        println("AI_DEBUG: 正在寻找模型: ${modelFile.absolutePath}")
 
-                val options = LlmInference.LlmInferenceOptions.builder()
-                    .setModelPath(modelFile.absolutePath)
-                    .setMaxTokens(1024)
-                    .setTopK(40)
-                    .setTemperature(0.7f)
-                    // 修正后的 Delegate 设置方式
-                    .setResultListener { _, _ -> } // 必须设置，即使为空
-                    .build()
-
-                llmInference = LlmInference.createFromOptions(context, options)
-                callback(true)
-            } catch (e: Exception) {
-                e.printStackTrace()
+        if (!modelFile.exists()) {
+            // 2. 备选方案：如果上面的路径找不到，尝试列出目录下所有文件，看看是不是文件名多了后缀
+            val files = folder?.listFiles()
+            val foundFile = files?.find { it.name.contains("gemma", ignoreCase = true) }
+            
+            if (foundFile != null) {
+                println("AI_DEBUG: 自动匹配到文件: ${foundFile.absolutePath}")
+                setupEngine(context, foundFile, callback)
+            } else {
+                println("AI_DEBUG: 目录下没有任何包含 gemma 的文件")
                 callback(false)
             }
+            return@execute
         }
-    }
 
-    fun getResponse(prompt: String): String {
-        return llmInference?.generateResponse(prompt) ?: "Engine not ready"
+        // 3. 文件存在，正常初始化
+        setupEngine(context, modelFile, callback)
+
+    } catch (e: Exception) {
+        println("AI_DEBUG: 引擎启动发生崩溃: ${e.message}")
+        e.printStackTrace()
+        callback(false)
+    }
+}
+
+// 提取出的配置方法
+private fun setupEngine(context: Context, file: File, callback: (Boolean) -> Unit) {
+    try {
+        val options = LlmInference.LlmInferenceOptions.builder()
+            .setModelPath(file.absolutePath)
+            // 如果 GPU 报错，请尝试将下面这行改为 .setDelegate(LlmInference.LlmInferenceOptions.Delegate.CPU)
+            .setDelegate(LlmInference.LlmInferenceOptions.Delegate.GPU)
+            .setMaxTokens(1024)
+            .setTopK(40)
+            .setTemperature(0.7f)
+            .build()
+
+        llmInference = LlmInference.createFromOptions(context, options)
+        callback(true)
+    } catch (e: Exception) {
+        callback(false)
     }
 }
