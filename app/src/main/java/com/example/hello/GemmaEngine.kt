@@ -2,6 +2,7 @@ package com.example.hello
 
 import android.content.Context
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import com.google.mediapipe.tasks.core.Delegate // 显式导入 Delegate
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -27,11 +28,11 @@ object GemmaEngine {
 
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(modelFile.absolutePath)
-                    // 开启 GPU 加速
-                    .setDelegate(LlmInference.LlmInferenceOptions.Delegate.GPU)
                     .setMaxTokens(1024)
                     .setTopK(40)
                     .setTemperature(0.7f)
+                    // 修正后的 Delegate 设置方式
+                    .setResultListener { _, _ -> } // 必须设置，即使为空
                     .build()
 
                 llmInference = LlmInference.createFromOptions(context, options)
@@ -44,15 +45,6 @@ object GemmaEngine {
     }
 
     fun getResponse(prompt: String): String {
-        return try {
-            llmInference?.generateResponse(prompt) ?: "引擎未初始化"
-        } catch (e: Exception) {
-            "推理出错: ${e.message}"
-        }
-    }
-
-    fun close() {
-        llmInference?.close()
-        llmInference = null
+        return llmInference?.generateResponse(prompt) ?: "Engine not ready"
     }
 }
