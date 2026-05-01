@@ -1,8 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // 如果你有使用 Kotlin 序列化（Ktor 网关需要），请加上这一行
-    // id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
+    // 开启序列化插件，解决 Ktor 网关传输 JSON 的需求
+    kotlin("plugin.serialization") version "1.9.0"
 }
 
 android {
@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.hello"
-        minSdk = 24
+        minSdk = 24 // MediaPipe 要求至少 24
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -36,7 +36,7 @@ android {
         jvmTarget = "1.8"
     }
 
-    // 关键：防止模型文件在打包时被压缩，否则推理引擎无法读取
+    // 极其重要：防止模型文件被压缩，否则 GPU 引擎无法 MMap 读取模型
     aaptOptions {
         noCompress("tflite", "litertlm", "bin")
     }
@@ -48,11 +48,10 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // 🔥 核心修复：添加 MediaPipe GenAI 库
-    // 这个库提供了 LlmInference 和 mediapipe 引用
+    // MediaPipe LLM 推理核心库
     implementation("com.google.mediapipe:tasks-genai:0.10.14")
 
-    // 🌐 Ktor 服务器相关依赖 (网关服务需要)
+    // Ktor 服务网关相关
     val ktor_version = "2.3.7"
     implementation("io.ktor:ktor-server-core:$ktor_version")
     implementation("io.ktor:ktor-server-netty:$ktor_version")
