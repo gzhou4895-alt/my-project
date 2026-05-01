@@ -3,7 +3,6 @@ package com.example.hello
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -28,45 +27,39 @@ class ModelDownloadManager(private val context: Context) {
         executor.execute {
             var connection: HttpURLConnection? = null
             try {
-                var currentUrl = modelUrl
+                // 处理 Hugging Face 常见的重定向 (Redirect)
+                var downloadUrl = modelUrl
                 var responseCode: Int
                 
-                // 循环处理重定向，防止 S3 节点跳转丢失 Token
-                var redirectCount = 0
-                while (true) {
-                    val url = URL(currentUrl)
+                // 允许最多 3 次跳转 (针对 LFS 存储节点)
+                repeat(3) {
+                    val url = URL(downloadUrl)
                     connection = (url.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 120000
-                        readTimeout = 120000
-                        instanceFollowRedirects = false // 手动处理防止 Header 丢失
-                        
+                        connectTimeout = 60000
+                        readTimeout = 60000
+                        instanceFollowRedirects = true
                         if (!hfToken.isNullOrBlank()) {
                             setRequestProperty("Authorization", "Bearer $hfToken")
                         }
                         setRequestProperty("User-Agent", "Mozilla/5.0")
                     }
-
-                    responseCode = connection.responseCode
-                    // 如果是 301 或 302 重定向
-                    if (responseCode == 301 || responseCode == 302 || responseCode == 303 || responseCode == 307 || responseCode == 308) {
-                        currentUrl = connection.getHeaderField("Location")
-                        connection.disconnect()
-                        redirectCount++
-                        if (redirectCount > 5) throw Exception("重定向次数过多")
-                        continue
+                    responseCode = connection!!.responseCode
+                    if (responseCode == 301 || responseCode == 302) {
+                        downloadUrl = connection!!.getHeaderField("Location")
+                        connection!!.disconnect()
                     }
-                    break
                 }
 
-                if (responseCode == 401) throw Exception("401 Unauthorized: Token 无效")
-                if (responseCode == 403) throw Exception("403 Forbidden: 请在 HF 网页点击 Accept License 接受协议")
-                if (responseCode != 200) throw Exception("HTTP 错误码: $responseCode")
+                responseCode = connection!!.responseCode
+                if (responseCode != 200) {
+                    throw Exception("HTTP $responseCode: 无法获取文件，请确认 Token 和协议签署")
+                }
 
                 val fileLength = connection!!.contentLength
-                val input = BufferedInputStream(connection.inputStream)
+                val input = BufferedInputStream(connection!!.inputStream)
                 val output = FileOutputStream(targetFile)
 
-                val data = ByteArray(1024 * 16)
+                val data = ByteArray(1024 * 32) // 32KB 缓冲区，针对大马宽带优化
                 var total: Long = 0
                 var count: Int
                 var lastProgress = 0
