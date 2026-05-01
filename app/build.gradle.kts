@@ -1,14 +1,15 @@
 import java.util.Date
 import java.util.TimeZone
+import java.text.SimpleDateFormat
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
 
-// 获取北京时间的函数
+// 修复后的时间获取函数
 fun releaseTime(): String {
-    val df = java.text.SimpleDateFormat("yyyyMMdd_HHmm")
+    val df = SimpleDateFormat("yyyyMMdd_HHmm")
     df.timeZone = TimeZone.getTimeZone("GMT+08:00")
     return df.format(Date())
 }
@@ -40,7 +41,7 @@ android {
         }
     }
 
-    // 核心重命名逻辑 (KTS 语法版)
+    // 核心重命名逻辑
     applicationVariants.all {
         val variant = this
         variant.outputs.all {
@@ -54,6 +55,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 
+    // 修复 jvmTarget 的报错提示
     kotlinOptions {
         jvmTarget = "1.8"
     }
