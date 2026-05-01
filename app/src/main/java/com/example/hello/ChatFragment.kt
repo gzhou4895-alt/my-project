@@ -4,60 +4,61 @@ import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.fragment.app.Fragment
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import java.util.concurrent.Executors
 
 class ChatFragment : Fragment(R.layout.fragment_chat) {
 
-    private val messages = mutableListOf<ChatMessage>()
-    private lateinit var adapter: ChatAdapter
-    private lateinit var tvStatus: TextView
-    private lateinit var rvMessages: RecyclerView
     private val uiExecutor = Executors.newSingleThreadExecutor()
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        tvStatus = view.findViewById(R.id.tvChatStatus)
-        rvMessages = view.findViewById(R.id.rvMessages)
-        val etInput = view.findViewById<EditText>(R.id.etInput)
+        // 1. 严格对应你 XML 中的 ID
+        val logView = view.findViewById<TextView>(R.id.logView)
+        val scrollView = view.findViewById<ScrollView>(R.id.scrollView)
+        val etInput = view.findViewById<EditText>(R.id.input) // 对应 android:id="@+id/input"
         val btnSend = view.findViewById<Button>(R.id.btnSend)
 
-        adapter = ChatAdapter(messages)
-        rvMessages.layoutManager = LinearLayoutManager(context)
-        rvMessages.adapter = adapter
+        logView.text = "正在初始化 GPU 引擎...\n"
 
-        tvStatus.text = "正在初始化 GPU 引擎..."
+        // 2. 初始化引擎
         GemmaEngine.initialize(requireContext()) { success ->
             activity?.runOnUiThread {
-                tvStatus.text = if (success) "✅ GPU 加速就绪" else "❌ 模型未就绪"
+                if (success) {
+                    logView.append("✅ GPU 加速就绪 (12GB RAM 已适配)\n")
+                } else {
+                    logView.append("❌ 模型加载失败，请检查文件路径。\n")
+                }
             }
         }
 
         btnSend.setOnClickListener {
             val prompt = etInput.text.toString().trim()
             if (prompt.isNotEmpty() && GemmaEngine.isReady()) {
-                addMessage(prompt, true)
+                // 显示用户消息
+                logView.append("\nME: $prompt\n")
                 etInput.text.clear()
-                tvStatus.text = "Gemma 正在思考..."
                 
+                // 自动滚动到底部
+                scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
+
+                logView.append("\nGEMMA: ")
+                btnSend.isEnabled = false
+
+                // 3. 执行推理
                 uiExecutor.execute {
                     val response = GemmaEngine.getResponse(prompt)
                     activity?.runOnUiThread {
-                        addMessage(response, false)
-                        tvStatus.text = "✅ GPU 加速就绪"
+                        logView.append("$response\n")
+                        btnSend.isEnabled = true
+                        // 再次滚动到底部
+                        scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
                     }
                 }
             }
         }
-    }
-
-    private fun addMessage(text: String, isUser: Boolean) {
-        messages.add(ChatMessage(text, isUser))
-        adapter.notifyItemInserted(messages.size - 1)
-        rvMessages.scrollToPosition(messages.size - 1)
     }
 }
