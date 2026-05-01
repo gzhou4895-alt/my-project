@@ -1,6 +1,7 @@
 import java.util.Date
 import java.util.TimeZone
 import java.text.SimpleDateFormat
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -58,10 +59,10 @@ android {
     }
 }
 
-// 采用最现代化的方式设置 JVM 目标，彻底解决 compilerOptions 报错
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = "1.8"
+// 终极修复：使用最新的 compilerOptions DSL，彻底告别 kotlinOptions
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_1_8)
     }
 }
 
