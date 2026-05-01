@@ -15,6 +15,8 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -36,39 +38,42 @@ android {
         jvmTarget = "1.8"
     }
 
-    // 1. 解决 Netty/Ktor 引起的 META-INF 文件冲突（修复你刚才的报错）
+    // 🛠️ 核心修复 1：解决 Netty 引起的 META-INF 文件冲突
+    // 🛠️ 核心修复 2：允许直接映射大文件 (解决加载红叉的关键)
     packaging {
         resources {
             excludes += "/META-INF/INDEX.LIST"
             excludes += "/META-INF/io.netty.versions.properties"
             excludes += "/META-INF/okio.kotlin_module"
         }
+        // 允许引擎直接读取未压缩的模型文件
+        jniLibs.useLegacyPackaging = true
     }
 
-    // 2. 防止模型文件被压缩（否则 GPU 推理引擎加载会失败）
+    // 🛠️ 核心修复 3：禁止压缩模型后缀，否则推理引擎无法读取
     aaptOptions {
-        noCompress("tflite", "litertlm", "bin")
+        noCompress("tflite", "litertlm", "bin", "model")
     }
 }
 
 dependencies {
-    // Android 核心 UI
+    // Android 核心支持
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // 🔥 MediaPipe LLM 推理引擎 (Gemma 本地运行核心)
+    // 🔥 MediaPipe LLM 推理核心 (Gemma 本地运行)
     implementation("com.google.mediapipe:tasks-genai:0.10.14")
 
-    // 🌐 Ktor 服务器 (让手机变成 AI 网关)
+    // 🌐 Ktor 服务器依赖 (AI 网关服务)
     val ktor_version = "2.3.7"
     implementation("io.ktor:ktor-server-core:$ktor_version")
     implementation("io.ktor:ktor-server-netty:$ktor_version")
     implementation("io.ktor:ktor-server-content-negotiation:$ktor_version")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
 
-    // 测试库
+    // 测试
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
