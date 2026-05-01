@@ -22,34 +22,33 @@ class ModelDownloadManager(private val context: Context) {
         var outputStream: FileOutputStream? = null
 
         try {
+            // 路径逻辑：即便没内存卡，也强制使用手机自带 512G 的安全目录
+            val targetDir = context.getExternalFilesDir(null) ?: context.filesDir
+            if (!targetDir.exists()) {
+                targetDir.mkdirs()
+            }
+            
+            val outputFile = File(targetDir, fileName)
+            // 如果存在旧文件先删除，防止“文件已存在”导致的无法写入闪退
+            if (outputFile.exists()) { outputFile.delete() }
+
             val url = URL(urlString)
             connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 15000
-            connection.readTimeout = 15000
-            connection.instanceFollowRedirects = true // 必须允许重定向，HuggingFace 经常跳链接
+            connection.connectTimeout = 20000
+            connection.readTimeout = 20000
+            connection.instanceFollowRedirects = true // 允许重定向
             connection.connect()
 
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                onError("服务器拒绝访问: ${connection.responseCode}")
+                onError("服务器拒绝(${connection.responseCode})")
                 return@withContext
             }
 
-            val fileLength = connection.contentLengthLong // 使用 Long 防溢出
+            val fileLength = connection.contentLengthLong
             inputStream = connection.inputStream
-            
-            // 使用外部私有空间，安全且空间大
-            val targetDir = context.getExternalFilesDir(null) 
-                ?: context.filesDir // 后备方案
-            val outputFile = File(targetDir, fileName)
-            
-            // 如果旧文件已存在，先删除，防止写入冲突
-            if (outputFile.exists()) {
-                outputFile.delete()
-            }
-            
             outputStream = FileOutputStream(outputFile)
 
-            val buffer = ByteArray(1024 * 16) // 提升至 16KB 缓存，下载更稳
+            val buffer = ByteArray(1024 * 16) // 16KB 缓冲区
             var totalBytesRead = 0L
             var bytesRead: Int
 
@@ -68,21 +67,16 @@ class ModelDownloadManager(private val context: Context) {
             outputStream.flush()
             onProgress(100)
 
-        } catch (e: SecurityException) {
-            e.printStackTrace()
-            onError("系统拦截了写入操作，请检查权限配置")
         } catch (e: Exception) {
             e.printStackTrace()
-            onError("错误: ${e.localizedMessage ?: "未知网络故障"}")
+            onError(e.localizedMessage ?: "未知网络错误")
         } finally {
-            // 确保不管成功失败，都关闭流，否则会造成内存泄漏
+            // 彻底关闭所有连接，防止内存溢出
             try {
                 outputStream?.close()
                 inputStream?.close()
                 connection?.disconnect()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) {}
         }
     }
 }
