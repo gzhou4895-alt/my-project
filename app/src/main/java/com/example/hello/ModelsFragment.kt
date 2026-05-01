@@ -26,9 +26,9 @@ class ModelsFragment : Fragment() {
         val tvStatus = view.findViewById<TextView>(R.id.tvDownloadStatus)
 
         btnDownload.setOnClickListener {
+            // 使用 applicationContext 保证 context 始终有效
             val context = requireContext().applicationContext
             
-            // 1. 初始化 UI 状态
             btnDownload.isEnabled = false
             btnDownload.text = "正在连接..."
             progressBar.visibility = View.VISIBLE
@@ -37,43 +37,52 @@ class ModelsFragment : Fragment() {
             tvStatus.text = "准备下载模型..."
             Toast.makeText(context, "开始下载，请勿关闭插件", Toast.LENGTH_SHORT).show()
 
-            // 2. 启动协程下载
             viewLifecycleOwner.lifecycleScope.launch {
-                val manager = ModelDownloadManager(context)
-                var lastUiUpdateTime = 0L // 用于限制 UI 刷新频率
+                try {
+                    val manager = ModelDownloadManager(context)
+                    var lastUiUpdateTime = 0L
 
-                manager.downloadModel(
-                    urlString = modelUrl,
-                    fileName = modelFileName,
-                    onProgress = { progress ->
-                        val currentTime = System.currentTimeMillis()
-                        // 节流逻辑：每 300ms 更新一次 UI，或下载完成时更新
-                        if (currentTime - lastUiUpdateTime > 300 || progress == 100) {
-                            lastUiUpdateTime = currentTime
+                    manager.downloadModel(
+                        urlString = modelUrl,
+                        fileName = modelFileName,
+                        onProgress = { progress ->
+                            val currentTime = System.currentTimeMillis()
+                            // 节流：防止 UI 刷新太快导致手机发热或卡顿
+                            if (currentTime - lastUiUpdateTime > 300 || progress == 100) {
+                                lastUiUpdateTime = currentTime
+                                withContext(Dispatchers.Main) {
+                                    // 检查 Fragment 是否还在，防止切到别的页面时崩溃
+                                    if (isAdded) {
+                                        if (progress == 100) {
+                                            progressBar.visibility = View.GONE
+                                            tvStatus.text = "模型下载成功！"
+                                            btnDownload.isEnabled = true
+                                            btnDownload.text = "重新下载"
+                                        } else if (progress >= 0) {
+                                            progressBar.isIndeterminate = false
+                                            progressBar.progress = progress
+                                            tvStatus.text = "下载进度: $progress%"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        onError = { errorMsg ->
                             withContext(Dispatchers.Main) {
-                                if (progress == 100) {
-                                    progressBar.visibility = View.GONE
-                                    tvStatus.text = "模型下载成功！"
+                                if (isAdded) {
+                                    tvStatus.text = "下载失败: $errorMsg"
                                     btnDownload.isEnabled = true
-                                    btnDownload.text = "重新下载"
-                                } else if (progress >= 0) {
-                                    progressBar.isIndeterminate = false
-                                    progressBar.progress = progress
-                                    tvStatus.text = "下载进度: $progress%"
+                                    btnDownload.text = "重试下载"
+                                    progressBar.visibility = View.GONE
+                                    Toast.makeText(context, "下载出错: $errorMsg", Toast.LENGTH_LONG).show()
                                 }
                             }
                         }
-                    },
-                    onError = { errorMsg ->
-                        withContext(Dispatchers.Main) {
-                            tvStatus.text = "下载失败: $errorMsg"
-                            btnDownload.isEnabled = true
-                            btnDownload.text = "重试下载"
-                            progressBar.visibility = View.GONE
-                            Toast.makeText(context, "下载出错，请检查网络", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                )
+                    )
+                } catch (e: Exception) {
+                    btnDownload.isEnabled = true
+                    tvStatus.text = "启动异常"
+                }
             }
         }
         return view
