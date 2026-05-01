@@ -24,8 +24,7 @@ class ModelsFragment : Fragment(R.layout.fragment_models) {
         val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
         val tvStatus = view.findViewById<TextView>(R.id.tvDownloadStatus)
 
-        // 【终极路径修正】
-        // 根据你的 .gitattributes，文件名确认为 gemma-4-E2B-it.litertlm
+        // 【最精准 URL 修复】
         val modelUrl = "https://huggingface.co/google/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm?download=true" 
         val fileName = "gemma-4-E2B-it.litertlm"
 
@@ -35,7 +34,7 @@ class ModelsFragment : Fragment(R.layout.fragment_models) {
             progressBar?.visibility = View.VISIBLE
             tvStatus?.visibility = View.VISIBLE
             btnDownload.isEnabled = false
-            tvStatus?.text = "正在连接并获取 LFS 资源..."
+            tvStatus?.text = "连接中 (正在定位官方 LFS 文件)..."
             
             downloadManager.downloadModel(
                 modelUrl, 
@@ -48,16 +47,17 @@ class ModelsFragment : Fragment(R.layout.fragment_models) {
                     }
 
                     override fun onSuccess(file: File) {
-                        tvStatus?.text = "下载完成！已就绪。"
+                        tvStatus?.text = "下载成功！文件已存入私有目录"
                         btnDownload.isEnabled = true
-                        Toast.makeText(context, "模型已保存", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "模型已就绪", Toast.LENGTH_SHORT).show()
                     }
 
                     override fun onFailure(e: Exception) {
-                        tvStatus?.text = "错误: ${e.message}"
+                        // 显示完整错误信息以便调试
+                        tvStatus?.text = "错误详情: ${e.message}"
                         btnDownload.isEnabled = true
-                        progressBar?.visibility = View.GONE
-                        Toast.makeText(context, "下载失败", Toast.LENGTH_LONG).show()
+                        // 404 往往是路径问题，403 是没点协议，401 是 Token 错
+                        Toast.makeText(context, "操作失败，请看提示", Toast.LENGTH_LONG).show()
                     }
                 }
             )
