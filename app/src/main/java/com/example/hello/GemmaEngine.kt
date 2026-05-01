@@ -19,61 +19,44 @@ object GemmaEngine {
 
         executor.execute {
             try {
+                // 自查点 1：确保路径获取准确
                 val folder = context.getExternalFilesDir(null)
-                // 自动匹配任何包含 gemma 的文件，解决文件名后缀微差问题
                 val modelFile = folder?.listFiles()?.find { it.name.contains("gemma", ignoreCase = true) }
 
                 if (modelFile != null && modelFile.exists()) {
-                    // 核心初始化逻辑
-                    val success = startInferenceEngine(context, modelFile)
+                    // 自查点 2：MediaPipe GenAI 库在加载外部文件时
+                    // 必须使用 setModelPath 而不是 setModelAssetPath
+                    val options = LlmInference.LlmInferenceOptions.builder()
+                        .setModelPath(modelFile.absolutePath) 
+                        .setMaxTokens(1024)
+                        .setTopK(40)
+                        .setTemperature(0.7f)
+                        .build()
+
+                    llmInference = LlmInference.createFromOptions(context, options)
+                    
+                    // 自查点 3：确保回调在主线程之前完成逻辑判断
+                    val success = llmInference != null
                     callback(success)
                 } else {
                     callback(false)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                close()
                 callback(false)
             }
         }
     }
 
-    private fun startInferenceEngine(context: Context, file: File): Boolean {
-        return try {
-            // 尝试 1：优先使用 GPU 加速（适合你的 12GB RAM 手机）
-            val options = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(file.absolutePath)
-                .setMaxTokens(1024)
-                .setTopK(40)
-                .setTemperature(0.7f)
-                .build()
-            
-            llmInference = LlmInference.createFromOptions(context, options)
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            // 如果 GPU 握手失败，MediaPipe 有时会自动处理，
-            // 但如果 llmInference 依然为 null，这里会返回 false
-            llmInference != null
-        }
-    }
-
-    /**
-     * 获取对话响应
-     */
     fun getResponse(prompt: String): String {
         return try {
-            if (llmInference == null) return "引擎尚未就绪"
-            
-            // 直接获取生成结果
-            llmInference?.generateResponse(prompt) ?: "生成失败"
+            llmInference?.generateResponse(prompt) ?: "引擎未就绪"
         } catch (e: Exception) {
-            "推理过程发生错误: ${e.message}"
+            "推理错误: ${e.message}"
         }
     }
 
-    /**
-     * 释放资源
-     */
     fun close() {
         try {
             llmInference?.close()
