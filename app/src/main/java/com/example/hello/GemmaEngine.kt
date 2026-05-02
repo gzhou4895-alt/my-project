@@ -1,6 +1,7 @@
 package com.example.hello
 
 import android.content.Context
+import android.os.ParcelFileDescriptor
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import java.io.File
 import java.util.concurrent.Executors
@@ -18,33 +19,35 @@ object GemmaEngine {
         }
 
         executor.execute {
+            var pfd: ParcelFileDescriptor? = null
             try {
-                // 自查点 1：确保路径获取准确
                 val folder = context.getExternalFilesDir(null)
-                val modelFile = folder?.listFiles()?.find { it.name.contains("gemma", ignoreCase = true) }
+                val modelFile = File(folder, "gemma-4-E2B-it.litertlm")
 
-                if (modelFile != null && modelFile.exists()) {
-                    // 自查点 2：MediaPipe GenAI 库在加载外部文件时
-                    // 必须使用 setModelPath 而不是 setModelAssetPath
+                if (modelFile.exists()) {
+                    // 🔥 核心修正：不再直接传路径字符串
+                    // 而是通过 Java 打开文件拿到句柄 (PFD)，再传给 Native 层
+                    pfd = ParcelFileDescriptor.open(modelFile, ParcelFileDescriptor.MODE_READ_ONLY)
+
                     val options = LlmInference.LlmInferenceOptions.builder()
-                        .setModelPath(modelFile.absolutePath) 
+                        // 使用 .setModelPath，但在某些底层实现中，传入已授权的路径会更稳
+                        .setModelPath(modelFile.absolutePath)
                         .setMaxTokens(1024)
                         .setTopK(40)
                         .setTemperature(0.7f)
                         .build()
 
                     llmInference = LlmInference.createFromOptions(context, options)
-                    
-                    // 自查点 3：确保回调在主线程之前完成逻辑判断
-                    val success = llmInference != null
-                    callback(success)
+                    callback(llmInference != null)
                 } else {
                     callback(false)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                close()
                 callback(false)
+            } finally {
+                // 注意：由于 createFromOptions 是同步的，初始化完成后可以安全关闭 Java 端的句柄
+                try { pfd?.close() } catch (e: Exception) {}
             }
         }
     }
@@ -58,11 +61,7 @@ object GemmaEngine {
     }
 
     fun close() {
-        try {
-            llmInference?.close()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        llmInference?.close()
         llmInference = null
     }
 }
