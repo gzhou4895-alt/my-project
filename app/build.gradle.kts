@@ -1,11 +1,12 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // Ktor 网关解析 JSON 必须的插件
+    // Ktor 序列化插件
     kotlin("plugin.serialization") version "1.9.0"
 }
 
 android {
+    // 必须与 Manifest 中的 package 一致
     namespace = "com.example.hello"
     compileSdk = 34
 
@@ -38,35 +39,41 @@ android {
         jvmTarget = "1.8"
     }
 
-    // 🛠️ 核心修复 1：解决 Netty 引起的 META-INF 文件冲突
-    // 🛠️ 核心修复 2：允许直接映射大文件 (解决加载红叉的关键)
+    // 🛠️ 核心修复：强制指定 Manifest 路径，确保权限配置被读取
+    sourceSets {
+        getByName("main") {
+            manifest.srcFile("src/main/AndroidManifest.xml")
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/INDEX.LIST"
             excludes += "/META-INF/io.netty.versions.properties"
             excludes += "/META-INF/okio.kotlin_module"
         }
-        // 允许引擎直接读取未压缩的模型文件
+        // 允许直接映射大文件，提高加载速度
         jniLibs.useLegacyPackaging = true
     }
 
-    // 🛠️ 核心修复 3：禁止压缩模型后缀，否则推理引擎无法读取
+    // 🛠️ 核心修复：禁止压缩模型文件，否则 MediaPipe 无法直接读取 2.58GB 的大模型
+    @Suppress("DEPRECATION")
     aaptOptions {
         noCompress("tflite", "litertlm", "bin", "model")
     }
 }
 
 dependencies {
-    // Android 核心支持
+    // Android 核心支持库
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // 🔥 MediaPipe LLM 推理核心 (Gemma 本地运行)
+    // 🔥 MediaPipe LLM 推理核心 (运行 Gemma 模型必备)
     implementation("com.google.mediapipe:tasks-genai:0.10.14")
 
-    // 🌐 Ktor 服务器依赖 (AI 网关服务)
+    // 🌐 Ktor 相关依赖
     val ktor_version = "2.3.7"
     implementation("io.ktor:ktor-server-core:$ktor_version")
     implementation("io.ktor:ktor-server-netty:$ktor_version")
