@@ -1,4 +1,4 @@
-name: Build Android APK
+Name: Build Android APK
 
 on:
   push:
@@ -42,9 +42,24 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew clean assembleDebug
 
-      - name: Upload APK artifact
+      # --- 新增的签名步骤 ---
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: app/build/outputs/apk/debug
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+
+      # --- 修改后的上传步骤：确保下载的是带签名的 APK ---
+      - name: Upload Signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: app-signed-release
+          # 使用签名插件输出的文件路径
+          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
           retention-days: 30
