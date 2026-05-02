@@ -1,4 +1,4 @@
-Name: Build Android APK
+name: Build Android APK
 
 on:
   push:
@@ -31,18 +31,17 @@ jobs:
       - name: Debug - Check project structure
         run: |
           echo "=== 查看 res/layout/ 目录内容 ==="
-          ls -la app/src/main/res/layout/
+          ls -la app/src/main/res/layout/ || true
           echo ""
           echo "=== 查找所有 fragment 布局文件 ==="
-          find . -name "fragment_*.xml" 2>/dev/null
+          find . -name "fragment_*.xml" 2>/dev/null || true
           echo ""
           echo "=== 查看 res/menu/ 目录内容 ==="
-          ls -la app/src/main/res/menu/
+          ls -la app/src/main/res/menu/ || true
 
       - name: Build Debug APK
         run: ./gradlew clean assembleDebug
 
-      # --- 新增的签名步骤 ---
       - name: Sign APK
         uses: r0adkll/sign-android-release@v1
         id: sign_app
@@ -55,11 +54,9 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
 
-      # --- 修改后的上传步骤：确保下载的是带签名的 APK ---
       - name: Upload Signed APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-signed-release
-          # 使用签名插件输出的文件路径
           path: ${{ steps.sign_app.outputs.signedReleaseFile }}
           retention-days: 30
