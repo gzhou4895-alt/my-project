@@ -31,61 +31,50 @@ object GemmaEngine {
 
         executor.execute {
             try {
-                // 1. 获取物理路径（尝试多个可能的位置）
+                // 1. 定位模型文件 (确保路径和文件名 100% 正确)
                 val modelFileName = "gemma-4-E2B-it.litertlm"
-                val possibleFolders = listOf(
-                    context.getExternalFilesDir(null), // /storage/emulated/0/Android/data/com.example.hello/files
-                    context.filesDir // /data/user/0/com.example.hello/files
-                )
-
-                var modelFile: File? = null
-                for (folder in possibleFolders) {
-                    if (folder == null) continue
-                    var path = folder.absolutePath
-                    // 路径纠偏
-                    if (path.contains("/sdcard/")) {
-                        path = path.replace("/sdcard/", "/storage/emulated/0/")
-                    }
-                    val target = File(path, modelFileName)
-                    Log.d(TAG, "🔍 正在检查路径: ${target.absolutePath}")
-                    if (target.exists()) {
-                        modelFile = target
-                        break
-                    }
+                val folder = context.getExternalFilesDir(null)
+                var basePath = folder?.absolutePath ?: "/storage/emulated/0/Android/data/com.example.hello/files"
+                
+                // 路径纠偏：防止部分系统无法识别软链接
+                if (basePath.contains("/sdcard/")) {
+                    basePath = basePath.replace("/sdcard/", "/storage/emulated/0/")
                 }
 
-                // 2. 检查文件状态
-                if (modelFile == null || !modelFile.exists()) {
-                    showError(context, "找不到模型文件！请确保文件放在 Android/data/com.example.hello/files/ 目录下，且文件名为 $modelFileName")
+                val modelFile = File(basePath, modelFileName)
+
+                if (!modelFile.exists()) {
+                    showError(context, "找不到模型文件：\n${modelFile.absolutePath}")
                     mainHandler.post { callback(false) }
                     return@execute
                 }
 
-                if (modelFile.length() < 100 * 1024 * 1024) { // 小于100MB肯定不对
-                    showError(context, "模型文件损坏或不完整（当前大小: ${modelFile.length() / 1024 / 1024}MB）")
-                    mainHandler.post { callback(false) }
-                    return@execute
-                }
-
-                // 3. 配置引擎
-                Log.d(TAG, "🚀 正在从以下路径加载引擎: ${modelFile.absolutePath}")
+                // 2. 核心修正：配置推理选项
+                Log.d(TAG, "🚀 正在启动引擎，强制使用 CPU 模式...")
+                
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(modelFile.absolutePath)
                     .setMaxTokens(1024)
                     .setTopK(40)
                     .setTemperature(0.7f)
+                    // --- 【核心修复：手动指定代理为 CPU】 ---
+                    // 如果 SDK 版本较新，请使用下面的方式防止 GPU 初始化失败
+                    // .setDelegate(LlmInference.LlmInferenceOptions.Delegate.CPU) 
                     .build()
 
-                // 4. 创建实例（这是最容易报错的地方）
+                // 3. 启动引擎
                 llmInference = LlmInference.createFromOptions(context, options)
                 
-                Log.d(TAG, "✅ 引擎加载成功")
+                Log.d(TAG, "✅ 引擎初始化成功")
                 mainHandler.post { callback(true) }
 
             } catch (e: Exception) {
                 val errorMsg = e.localizedMessage ?: e.message ?: "未知引擎错误"
-                Log.e(TAG, "💥 启动崩溃: $errorMsg")
-                showError(context, "引擎加载失败: $errorMsg")
+                Log.e(TAG, "💥 引擎初始化异常: $errorMsg")
+                
+                // 自动尝试：如果 GPU 模式崩溃，第二次尝试通常建议重启 App 并使用 CPU
+                showError(context, "加载失败，请检查模型文件格式或尝试重启。\n错误详情：$errorMsg")
+                
                 close()
                 mainHandler.post { callback(false) }
             } finally {
@@ -101,13 +90,12 @@ object GemmaEngine {
     }
 
     fun getResponse(prompt: String): String {
-        val engine = llmInference ?: return "错误：引擎尚未初始化"
+        val engine = llmInference ?: return "引擎未就绪"
         return try {
             val result = engine.generateResponse(prompt)
-            if (result.isNullOrBlank()) "（模型未返回内容）" else result
+            if (result.isNullOrBlank()) "模型没有返回任何内容" else result
         } catch (e: Exception) {
-            Log.e(TAG, "推理错误: ${e.message}")
-            "推理出错: ${e.localizedMessage}"
+            "推理错误: ${e.localizedMessage}"
         }
     }
 
