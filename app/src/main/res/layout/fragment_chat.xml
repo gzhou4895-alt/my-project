@@ -1,52 +1,92 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="8dp">
+package com.example.hello
 
-    <ScrollView
-        android:id="@+id/scrollView"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:scrollbars="vertical">
+import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ScrollView
+import android.widget.TextView
+import androidx.fragment.app.Fragment
 
-        <TextView
-            android:id="@+id/logView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="8dp"
-            android:textSize="16sp"
-            android:lineSpacingExtra="4dp" />
+class ChatFragment : Fragment() {
 
-    </ScrollView>
+    // 定义控件变量
+    private var logView: TextView? = null
+    private var etInput: EditText? = null
+    private var btnSend: Button? = null
+    private var scrollView: ScrollView? = null
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="8dp">
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        // 加载布局文件
+        val view = inflater.inflate(R.layout.fragment_chat, container, false)
+        
+        // --- 严格对齐你提供的 XML 中的 ID ---
+        logView = view.findViewById(R.id.logView)
+        etInput = view.findViewById(R.id.input)
+        btnSend = view.findViewById(R.id.btnSend)
+        scrollView = view.findViewById(R.id.scrollView)
 
-        <EditText
-            android:id="@+id/input"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="输入消息..."
-            android:padding="12dp"
-            android:background="@android:drawable/editbox_background"
-            android:maxLines="4" />
+        return view
+    }
 
-        <Button
-            android:id="@+id/btnSend"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="发送"
-            android:layout_marginStart="8dp"
-            android:paddingLeft="16dp"
-            android:paddingRight="16dp" />
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
 
-    </LinearLayout>
+        // 1. 初始化 AI 引擎
+        logView?.text = "正在准备 AI 助手...\n"
+        context?.let { ctx ->
+            GemmaEngine.initialize(ctx) { success ->
+                activity?.runOnUiThread {
+                    if (success) {
+                        logView?.append("✅ 引擎已就绪，请输入问题。\n")
+                    } else {
+                        logView?.append("❌ 加载失败，请检查模型文件路径或显存。\n")
+                    }
+                }
+            }
+        }
 
-</LinearLayout>
+        // 2. 设置监听器，实现流式输出（打字机效果）
+        GemmaEngine.setOnResultListener { partialText, isDone ->
+            activity?.runOnUiThread {
+                // 追加显示的文字
+                logView?.append(partialText)
+                
+                if (isDone) {
+                    btnSend?.isEnabled = true
+                    logView?.append("\n------------------\n")
+                }
+                // 自动滚动
+                scrollToBottom()
+            }
+        }
+
+        // 3. 发送按钮逻辑
+        btnSend?.setOnClickListener {
+            val prompt = etInput?.text.toString().trim()
+            if (prompt.isNotEmpty() && GemmaEngine.isReady()) {
+                logView?.append("\n我: $prompt\nAI: ")
+                etInput?.text?.clear()
+                
+                // 禁用按钮防止乱点
+                btnSend?.isEnabled = false
+                
+                // 异步发送指令给 Gemma
+                GemmaEngine.sendPrompt(prompt)
+                
+                scrollToBottom()
+            }
+        }
+    }
+
+    private fun scrollToBottom() {
+        scrollView?.post {
+            scrollView?.fullScroll(View.FOCUS_DOWN)
+        }
+    }
+}
