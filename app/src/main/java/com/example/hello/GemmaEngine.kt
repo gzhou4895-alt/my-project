@@ -1,6 +1,8 @@
 package com.example.hello
 
 import android.content.Context
+import android.os.Build
+import android.os.Environment
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import java.io.File
 import java.util.concurrent.Executors
@@ -19,31 +21,42 @@ object GemmaEngine {
 
         executor.execute {
             try {
-                // 自查点 1：确保路径获取准确
+                // 1. 物理权限硬核检查：如果没权限，直接断开，绝不调用 MediaPipe 接口
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+                    callback(false)
+                    return@execute
+                }
+
+                // 2. 安全获取目录，增加所有环节的空判断
                 val folder = context.getExternalFilesDir(null)
-                val modelFile = folder?.listFiles()?.find { it.name.contains("gemma", ignoreCase = true) }
+                if (folder == null || !folder.exists()) {
+                    callback(false)
+                    return@execute
+                }
+
+                // 3. 安全寻找文件
+                val files = folder.listFiles()
+                val modelFile = files?.find { it.name.contains("gemma", ignoreCase = true) }
 
                 if (modelFile != null && modelFile.exists()) {
-                    // 自查点 2：MediaPipe GenAI 库在加载外部文件时
-                    // 必须使用 setModelPath 而不是 setModelAssetPath
+                    // 4. MediaPipe 的最后防线：构建 Options
                     val options = LlmInference.LlmInferenceOptions.builder()
-                        .setModelPath(modelFile.absolutePath) 
+                        .setModelPath(modelFile.absolutePath)
                         .setMaxTokens(1024)
                         .setTopK(40)
                         .setTemperature(0.7f)
                         .build()
 
+                    // 这里是闪退高发区，MediaPipe 内部加载异常
                     llmInference = LlmInference.createFromOptions(context, options)
-                    
-                    // 自查点 3：确保回调在主线程之前完成逻辑判断
-                    val success = llmInference != null
-                    callback(success)
+                    callback(llmInference != null)
                 } else {
                     callback(false)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                close()
+                // 彻底释放，防止内存残留导致下次启动依然崩
+                close() 
                 callback(false)
             }
         }
@@ -61,7 +74,7 @@ object GemmaEngine {
         try {
             llmInference?.close()
         } catch (e: Exception) {
-            e.printStackTrace()
+            // 忽略关闭异常
         }
         llmInference = null
     }
