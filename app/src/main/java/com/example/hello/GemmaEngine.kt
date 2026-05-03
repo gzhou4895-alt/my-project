@@ -1,7 +1,10 @@
 package com.example.hello
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import java.io.File
 import java.util.concurrent.Executors
@@ -10,8 +13,8 @@ object GemmaEngine {
     private var llmInference: LlmInference? = null
     private val executor = Executors.newSingleThreadExecutor()
     private const val TAG = "GemmaEngine"
+    private val mainHandler = Handler(Looper.getMainLooper())
 
-    // 增加一个状态锁，防止多次重复初始化
     @Volatile
     private var isInitializing = false
 
@@ -28,60 +31,82 @@ object GemmaEngine {
 
         executor.execute {
             try {
-                // 1. 路径处理：直接获取 App 专有的外部文件目录
-                val folder = context.getExternalFilesDir(null)
-                var basePath = folder?.absolutePath ?: "/storage/emulated/0/Android/data/com.example.hello/files"
+                // 1. 获取物理路径（尝试多个可能的位置）
+                val modelFileName = "gemma-4-E2B-it.litertlm"
+                val possibleFolders = listOf(
+                    context.getExternalFilesDir(null), // /storage/emulated/0/Android/data/com.example.hello/files
+                    context.filesDir // /data/user/0/com.example.hello/files
+                )
+
+                var modelFile: File? = null
+                for (folder in possibleFolders) {
+                    if (folder == null) continue
+                    var path = folder.absolutePath
+                    // 路径纠偏
+                    if (path.contains("/sdcard/")) {
+                        path = path.replace("/sdcard/", "/storage/emulated/0/")
+                    }
+                    val target = File(path, modelFileName)
+                    Log.d(TAG, "🔍 正在检查路径: ${target.absolutePath}")
+                    if (target.exists()) {
+                        modelFile = target
+                        break
+                    }
+                }
+
+                // 2. 检查文件状态
+                if (modelFile == null || !modelFile.exists()) {
+                    showError(context, "找不到模型文件！请确保文件放在 Android/data/com.example.hello/files/ 目录下，且文件名为 $modelFileName")
+                    mainHandler.post { callback(false) }
+                    return@execute
+                }
+
+                if (modelFile.length() < 100 * 1024 * 1024) { // 小于100MB肯定不对
+                    showError(context, "模型文件损坏或不完整（当前大小: ${modelFile.length() / 1024 / 1024}MB）")
+                    mainHandler.post { callback(false) }
+                    return@execute
+                }
+
+                // 3. 配置引擎
+                Log.d(TAG, "🚀 正在从以下路径加载引擎: ${modelFile.absolutePath}")
+                val options = LlmInference.LlmInferenceOptions.builder()
+                    .setModelPath(modelFile.absolutePath)
+                    .setMaxTokens(1024)
+                    .setTopK(40)
+                    .setTemperature(0.7f)
+                    .build()
+
+                // 4. 创建实例（这是最容易报错的地方）
+                llmInference = LlmInference.createFromOptions(context, options)
                 
-                // 统一路径格式，避免符号链接导致的 SDK 读取失败
-                if (basePath.contains("/sdcard/")) {
-                    basePath = basePath.replace("/sdcard/", "/storage/emulated/0/")
-                }
+                Log.d(TAG, "✅ 引擎加载成功")
+                mainHandler.post { callback(true) }
 
-                val fileName = "gemma-4-E2B-it.litertlm"
-                val modelFile = File(basePath, fileName)
-
-                Log.d(TAG, "🎯 检查路径: ${modelFile.absolutePath}")
-
-                // 2. 严格检查文件
-                if (modelFile.exists() && modelFile.length() > 1024 * 1024) { // 至少大于1MB
-                    val options = LlmInference.LlmInferenceOptions.builder()
-                        .setModelPath(modelFile.absolutePath)
-                        .setMaxTokens(1024)
-                        .setTopK(40)
-                        .setTemperature(0.7f)
-                        .build()
-
-                    // 3. 实例化引擎
-                    val inference = LlmInference.createFromOptions(context, options)
-                    llmInference = inference
-                    
-                    Log.d(TAG, "✅ 引擎实例已创建")
-                    callback(true)
-                } else {
-                    Log.e(TAG, "❌ 文件不存在或损坏: ${modelFile.absolutePath}")
-                    callback(false)
-                }
             } catch (e: Exception) {
-                Log.e(TAG, "💥 引擎加载失败: ${e.message}")
+                val errorMsg = e.localizedMessage ?: e.message ?: "未知引擎错误"
+                Log.e(TAG, "💥 启动崩溃: $errorMsg")
+                showError(context, "引擎加载失败: $errorMsg")
                 close()
-                callback(false)
+                mainHandler.post { callback(false) }
             } finally {
                 isInitializing = false
             }
         }
     }
 
-    /**
-     * 获取回复，增加了一些容错处理
-     */
+    private fun showError(context: Context, message: String) {
+        mainHandler.post {
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
     fun getResponse(prompt: String): String {
-        val engine = llmInference ?: return "错误：引擎尚未初始化。"
+        val engine = llmInference ?: return "错误：引擎尚未初始化"
         return try {
-            // MediaPipe 的 generateResponse 是同步阻塞的，必须在子线程运行
             val result = engine.generateResponse(prompt)
-            if (result.isNullOrBlank()) "（模型未返回任何内容）" else result
+            if (result.isNullOrBlank()) "（模型未返回内容）" else result
         } catch (e: Exception) {
-            Log.e(TAG, "推理崩溃: ${e.message}")
+            Log.e(TAG, "推理错误: ${e.message}")
             "推理出错: ${e.localizedMessage}"
         }
     }
