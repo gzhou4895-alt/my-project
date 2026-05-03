@@ -8,51 +8,56 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import java.util.concurrent.Executors
 
 class ChatFragment : Fragment(R.layout.fragment_chat) {
 
     private val uiExecutor = Executors.newSingleThreadExecutor()
-    private var isEngineInitializing = false // 防止重复初始化
+    private var isEngineInitializing = false 
+
+    // 使用 lazy 绑定，避免在异步回调中 findViewById 找不到 view
+    private var logView: TextView? = null
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val logView = view.findViewById<TextView>(R.id.logView)
+        logView = view.findViewById(R.id.logView)
         val scrollView = view.findViewById<ScrollView>(R.id.scrollView)
         val etInput = view.findViewById<EditText>(R.id.input)
         val btnSend = view.findViewById<Button>(R.id.btnSend)
 
-        logView.text = "等待权限授予...\n"
+        logView?.text = "等待权限授予...\n"
 
-        // 核心：只有拿到权限才初始化，否则直接加载会闪退
         if (hasStoragePermission()) {
             startGemma()
         } else {
-            logView.append("⚠️ 请在主界面授予文件权限后重试。\n")
+            logView?.append("⚠️ 请在主界面授予文件权限以激活 AI。\n")
         }
 
         btnSend.setOnClickListener {
             val prompt = etInput.text.toString().trim()
-            if (prompt.isNotEmpty() && GemmaEngine.isReady()) {
-                logView.append("\nME: $prompt\n")
-                etInput.text.clear()
-                scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
+            if (prompt.isNotEmpty()) {
+                if (GemmaEngine.isReady()) {
+                    logView?.append("\nME: $prompt\n")
+                    etInput.text.clear()
+                    scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
 
-                logView.append("\nGEMMA: ")
-                btnSend.isEnabled = false
+                    logView?.append("\nGEMMA: ")
+                    btnSend.isEnabled = false
 
-                uiExecutor.execute {
-                    val response = GemmaEngine.getResponse(prompt)
-                    activity?.runOnUiThread {
-                        logView.append("$response\n")
-                        btnSend.isEnabled = true
-                        scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
+                    uiExecutor.execute {
+                        val response = GemmaEngine.getResponse(prompt)
+                        activity?.runOnUiThread {
+                            logView?.append("$response\n")
+                            btnSend.isEnabled = true
+                            scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
+                        }
                     }
+                } else {
+                    Toast.makeText(context, "引擎尚未就绪，请稍后...", Toast.LENGTH_SHORT).show()
                 }
-            } else if (!GemmaEngine.isReady()) {
-                Toast.makeText(context, "引擎尚未就绪，请检查模型文件", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -64,35 +69,44 @@ class ChatFragment : Fragment(R.layout.fragment_chat) {
     }
 
     private fun startGemma() {
-        if (isEngineInitializing) return
-        isEngineInitializing = true
+        // 增加防御：如果已经就绪或正在初始化，直接返回
+        if (isEngineInitializing || GemmaEngine.isReady()) return
         
-        val logView = view?.findViewById<TextView>(R.id.logView)
+        isEngineInitializing = true
         logView?.append("正在检测本地模型资源...\n")
 
-        // 使用 try-catch 彻底包裹初始化过程，防止引擎底层代码在读取 2.6G 模型时崩溃
         try {
-            GemmaEngine.initialize(requireContext().applicationContext) { success ->
+            // 安全获取 Context
+            val contextForInit = context?.applicationContext ?: return
+            
+            GemmaEngine.initialize(contextForInit) { success ->
+                // 安全回到主线程更新 UI
                 activity?.runOnUiThread {
-                    if (success) {
-                        logView?.append("✅ GPU 引擎初始化成功！\n")
-                    } else {
-                        logView?.append("❌ 引擎启动失败。请确认模型文件路径及文件名正确。\n")
+                    if (isAdded) { // 确保 Fragment 还在
+                        if (success) {
+                            logView?.append("✅ GPU 引擎初始化成功！\n")
+                        } else {
+                            logView?.append("❌ 引擎启动失败。请确认模型文件路径：\n/sdcard/Android/data/com.example.hello/files/gemma-4-E2B-it.litertlm\n")
+                        }
                     }
                     isEngineInitializing = false
                 }
             }
         } catch (e: Exception) {
-            logView?.append("💥 初始化发生严重错误: ${e.message}\n")
+            logView?.append("💥 初始化异常: ${e.message}\n")
             isEngineInitializing = false
         }
     }
 
-    // 当用户授予权限回来时，MainActivity 会触发 onResume，我们可以在这里检测并启动
     override fun onResume() {
         super.onResume()
-        if (hasStoragePermission() && !GemmaEngine.isReady() && !isEngineInitializing) {
+        if (hasStoragePermission() && !GemmaEngine.isReady()) {
             startGemma()
         }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        logView = null // 释放引用，防止内存泄漏
     }
 }
