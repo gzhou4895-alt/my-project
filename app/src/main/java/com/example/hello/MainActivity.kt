@@ -1,90 +1,84 @@
 package com.example.hello
 
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.Environment
-import android.provider.Settings
-import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import androidx.fragment.app.Fragment
-import com.google.android.material.bottomnavigation.BottomNavigationView
+import android.content.Context
+import android.util.Log
+import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import java.io.File
+import java.util.concurrent.Executors
 
-class MainActivity : AppCompatActivity() {
+object GemmaEngine {
+    private var llmInference: LlmInference? = null
+    private val executor = Executors.newSingleThreadExecutor()
+    private const val TAG = "GemmaEngine"
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        
-        try {
-            // 1. 设置布局
-            setContentView(R.layout.activity_main)
+    fun isReady(): Boolean = llmInference != null
 
-            // 2. 检查权限：如果没权限，先跳转去申请，不加载聊天界面
-            if (!hasStoragePermission()) {
-                requestStoragePermission()
-            } else {
-                if (savedInstanceState == null) {
-                    loadFragment(ChatFragment())
-                }
-            }
-
-            // 3. 底部导航逻辑
-            val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_nav)
-            bottomNav?.setOnItemSelectedListener { item ->
-                when (item.itemId) {
-                    R.id.nav_chat -> loadFragment(ChatFragment())
-                    R.id.nav_models -> loadFragment(ModelsFragment())
-                    R.id.nav_settings -> loadFragment(SettingsFragment())
-                }
-                true
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(this, "启动异常，请检查布局文件", Toast.LENGTH_LONG).show()
+    fun initialize(context: Context, callback: (Boolean) -> Unit) {
+        if (llmInference != null) {
+            callback(true)
+            return
         }
-    }
 
-    private fun hasStoragePermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Environment.isExternalStorageManager()
-        } else {
-            true
-        }
-    }
-
-    private fun requestStoragePermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        executor.execute {
             try {
-                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                intent.data = Uri.parse("package:$packageName")
-                startActivityForResult(intent, 100)
+                // 1. 获取系统提供的私有路径
+                val folder = context.getExternalFilesDir(null)
+                
+                // 2. 核心修正：确保路径是以物理挂载点 /storage/emulated/0 开头
+                // 如果系统返回了 /sdcard/，我们将其强行替换为物理地址
+                var basePath = folder?.absolutePath ?: "/storage/emulated/0/Android/data/com.example.hello/files"
+                
+                if (basePath.contains("/sdcard/")) {
+                    basePath = basePath.replace("/sdcard/", "/storage/emulated/0/")
+                }
+
+                // 3. 锁定文件名
+                val fileName = "gemma-4-E2B-it.litertlm"
+                val modelFile = File(basePath, fileName)
+
+                Log.d(TAG, "🎯 最终锁定的物理路径: ${modelFile.absolutePath}")
+
+                // 4. 物理文件存在性与大小检查
+                if (modelFile.exists() && modelFile.canRead()) {
+                    Log.d(TAG, "✅ 文件确认就绪，大小: ${modelFile.length()} 字节")
+
+                    val options = LlmInference.LlmInferenceOptions.builder()
+                        .setModelPath(modelFile.absolutePath)
+                        .setMaxTokens(1024)
+                        .setTopK(40)
+                        .setTemperature(0.7f)
+                        .build()
+
+                    // 5. 启动 MediaPipe 引擎
+                    llmInference = LlmInference.createFromOptions(context, options)
+                    callback(llmInference != null)
+                } else {
+                    Log.e(TAG, "❌ 找不到物理文件！请检查路径：${modelFile.absolutePath}")
+                    callback(false)
+                }
             } catch (e: Exception) {
-                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                startActivity(intent)
-            }
-            Toast.makeText(this, "请开启权限以允许加载模型", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // 从设置页面回来后，如果拿到权限了就加载界面
-        if (hasStoragePermission()) {
-            val currentFragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
-            if (currentFragment == null) {
-                loadFragment(ChatFragment())
+                Log.e(TAG, "💥 引擎启动崩溃: ${e.message}")
+                e.printStackTrace()
+                close()
+                callback(false)
             }
         }
     }
 
-    private fun loadFragment(fragment: Fragment) {
-        try {
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.fragment_container, fragment)
-                .commitAllowingStateLoss()
+    fun getResponse(prompt: String): String {
+        return try {
+            llmInference?.generateResponse(prompt) ?: "引擎未就绪"
         } catch (e: Exception) {
-            e.printStackTrace()
+            "推理错误: ${e.message}"
         }
+    }
+
+    fun close() {
+        try {
+            llmInference?.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "释放资源异常: ${e.message}")
+        }
+        llmInference = null
     }
 }
