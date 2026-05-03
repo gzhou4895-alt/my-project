@@ -1,34 +1,32 @@
 package com.example.hello
 
-import android.os.Handler
-import android.os.Looper
+import android.util.Log
 
-class LlmRunner {
+/**
+ * 修复后的 LlmRunner
+ * 不再持有 getResponse 同步方法，而是作为异步发送的中转站
+ */
+object LlmRunner {
+    private const val TAG = "LlmRunner"
 
     /**
-     * 真正的推理执行方法
-     * 已经删除了模拟的 "token:" 等冗余日志信息
+     * 执行推理任务
+     * 结果将通过 GemmaEngine 中设置的 setOnResultListener 异步返回给 UI
      */
-    fun run(input: String, callback: (String) -> Unit) {
-
-        // 获取主线程 Handler，确保 UI 更新不会崩溃
-        val mainHandler = Handler(Looper.getMainLooper())
-
-        Thread {
-            try {
-                // 1. 调用刚才我们在 GemmaEngine 封装好的真实推理方法
-                val response = GemmaEngine.getResponse(input)
-
-                // 2. 将结果传回给回调函数
-                mainHandler.post {
-                    callback(response)
-                }
-
-            } catch (e: Exception) {
-                mainHandler.post {
-                    callback("❌ 推理失败: ${e.message}")
-                }
-            }
-        }.start()
+    fun run(prompt: String) {
+        if (GemmaEngine.isReady()) {
+            Log.d(TAG, "正在分发异步任务: $prompt")
+            GemmaEngine.sendPrompt(prompt)
+        } else {
+            Log.e(TAG, "引擎尚未就绪，无法执行任务")
+        }
+    }
+    
+    /**
+     * 如果你后续想在 Runner 层做一些 Prompt 预处理（比如加点前缀），可以在这里写
+     */
+    fun runWithTemplate(userPrompt: String) {
+        val templatePrompt = "请用简洁的语言回答：$userPrompt"
+        run(templatePrompt)
     }
 }
