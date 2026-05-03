@@ -10,14 +10,13 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import java.io.File
 import java.util.concurrent.Executors
 
 class ChatFragment : Fragment(R.layout.fragment_chat) {
 
     private val uiExecutor = Executors.newSingleThreadExecutor()
     private var isEngineInitializing = false 
-
-    // 使用 lazy 绑定，避免在异步回调中 findViewById 找不到 view
     private var logView: TextView? = null
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -69,24 +68,31 @@ class ChatFragment : Fragment(R.layout.fragment_chat) {
     }
 
     private fun startGemma() {
-        // 增加防御：如果已经就绪或正在初始化，直接返回
         if (isEngineInitializing || GemmaEngine.isReady()) return
         
         isEngineInitializing = true
         logView?.append("正在检测本地模型资源...\n")
 
         try {
-            // 安全获取 Context
             val contextForInit = context?.applicationContext ?: return
             
             GemmaEngine.initialize(contextForInit) { success ->
-                // 安全回到主线程更新 UI
                 activity?.runOnUiThread {
-                    if (isAdded) { // 确保 Fragment 还在
+                    if (isAdded) {
                         if (success) {
                             logView?.append("✅ GPU 引擎初始化成功！\n")
                         } else {
-                            logView?.append("❌ 引擎启动失败。请确认模型文件路径：\n/sdcard/Android/data/com.example.hello/files/gemma-4-E2B-it.litertlm\n")
+                            // --- 【核心修复：动态显示物理路径】 ---
+                            val folder = context?.getExternalFilesDir(null)
+                            var basePath = folder?.absolutePath ?: "/storage/emulated/0/Android/data/com.example.hello/files"
+                            // 强制将显示出来的文字也改为物理路径格式
+                            if (basePath.contains("/sdcard/")) {
+                                basePath = basePath.replace("/sdcard/", "/storage/emulated/0/")
+                            }
+                            
+                            logView?.append("❌ 引擎启动失败。\n")
+                            logView?.append("请确认模型文件是否存在于：\n")
+                            logView?.append("$basePath/gemma-4-E2B-it.litertlm\n")
                         }
                     }
                     isEngineInitializing = false
@@ -107,6 +113,6 @@ class ChatFragment : Fragment(R.layout.fragment_chat) {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        logView = null // 释放引用，防止内存泄漏
+        logView = null
     }
 }
