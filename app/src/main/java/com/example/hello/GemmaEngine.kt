@@ -11,6 +11,10 @@ object GemmaEngine {
     private val executor = Executors.newSingleThreadExecutor()
     private const val TAG = "GemmaEngine"
 
+    // 增加一个状态锁，防止多次重复初始化
+    @Volatile
+    private var isInitializing = false
+
     fun isReady(): Boolean = llmInference != null
 
     fun initialize(context: Context, callback: (Boolean) -> Unit) {
@@ -18,30 +22,28 @@ object GemmaEngine {
             callback(true)
             return
         }
+        
+        if (isInitializing) return
+        isInitializing = true
 
         executor.execute {
             try {
-                // 1. 获取系统提供的私有路径
+                // 1. 路径处理：直接获取 App 专有的外部文件目录
                 val folder = context.getExternalFilesDir(null)
-                
-                // 2. 核心修正：确保路径是以物理挂载点 /storage/emulated/0 开头
-                // 如果系统返回了 /sdcard/，我们将其强行替换为物理地址
                 var basePath = folder?.absolutePath ?: "/storage/emulated/0/Android/data/com.example.hello/files"
                 
+                // 统一路径格式，避免符号链接导致的 SDK 读取失败
                 if (basePath.contains("/sdcard/")) {
                     basePath = basePath.replace("/sdcard/", "/storage/emulated/0/")
                 }
 
-                // 3. 锁定文件名
                 val fileName = "gemma-4-E2B-it.litertlm"
                 val modelFile = File(basePath, fileName)
 
-                Log.d(TAG, "🎯 最终锁定的物理路径: ${modelFile.absolutePath}")
+                Log.d(TAG, "🎯 检查路径: ${modelFile.absolutePath}")
 
-                // 4. 物理文件存在性与大小检查
-                if (modelFile.exists() && modelFile.canRead()) {
-                    Log.d(TAG, "✅ 文件确认就绪，大小: ${modelFile.length()} 字节")
-
+                // 2. 严格检查文件
+                if (modelFile.exists() && modelFile.length() > 1024 * 1024) { // 至少大于1MB
                     val options = LlmInference.LlmInferenceOptions.builder()
                         .setModelPath(modelFile.absolutePath)
                         .setMaxTokens(1024)
@@ -49,27 +51,38 @@ object GemmaEngine {
                         .setTemperature(0.7f)
                         .build()
 
-                    // 5. 启动 MediaPipe 引擎
-                    llmInference = LlmInference.createFromOptions(context, options)
-                    callback(llmInference != null)
+                    // 3. 实例化引擎
+                    val inference = LlmInference.createFromOptions(context, options)
+                    llmInference = inference
+                    
+                    Log.d(TAG, "✅ 引擎实例已创建")
+                    callback(true)
                 } else {
-                    Log.e(TAG, "❌ 找不到物理文件！请检查路径：${modelFile.absolutePath}")
+                    Log.e(TAG, "❌ 文件不存在或损坏: ${modelFile.absolutePath}")
                     callback(false)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "💥 引擎启动崩溃: ${e.message}")
-                e.printStackTrace()
+                Log.e(TAG, "💥 引擎加载失败: ${e.message}")
                 close()
                 callback(false)
+            } finally {
+                isInitializing = false
             }
         }
     }
 
+    /**
+     * 获取回复，增加了一些容错处理
+     */
     fun getResponse(prompt: String): String {
+        val engine = llmInference ?: return "错误：引擎尚未初始化。"
         return try {
-            llmInference?.generateResponse(prompt) ?: "引擎未就绪"
+            // MediaPipe 的 generateResponse 是同步阻塞的，必须在子线程运行
+            val result = engine.generateResponse(prompt)
+            if (result.isNullOrBlank()) "（模型未返回任何内容）" else result
         } catch (e: Exception) {
-            "推理错误: ${e.message}"
+            Log.e(TAG, "推理崩溃: ${e.message}")
+            "推理出错: ${e.localizedMessage}"
         }
     }
 
@@ -77,8 +90,9 @@ object GemmaEngine {
         try {
             llmInference?.close()
         } catch (e: Exception) {
-            Log.e(TAG, "释放资源异常: ${e.message}")
+            Log.e(TAG, "关闭异常: ${e.message}")
         }
         llmInference = null
+        isInitializing = false
     }
 }
