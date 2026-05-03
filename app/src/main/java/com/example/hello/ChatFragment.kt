@@ -12,6 +12,7 @@ import androidx.fragment.app.Fragment
 
 class ChatFragment : Fragment() {
 
+    // 定义控件变量
     private var logView: TextView? = null
     private var etInput: EditText? = null
     private var btnSend: Button? = null
@@ -21,12 +22,14 @@ class ChatFragment : Fragment() {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
+        // 加载布局文件
         val view = inflater.inflate(R.layout.fragment_chat, container, false)
         
-        logView = view.findViewById(R.id.log_view)
-        etInput = view.findViewById(R.id.et_input)
-        btnSend = view.findViewById(R.id.btn_send)
-        scrollView = view.findViewById(R.id.scroll_view)
+        // --- 严格对齐你提供的 XML 中的 ID ---
+        logView = view.findViewById(R.id.logView)
+        etInput = view.findViewById(R.id.input)
+        btnSend = view.findViewById(R.id.btnSend)
+        scrollView = view.findViewById(R.id.scrollView)
 
         return view
     }
@@ -34,50 +37,46 @@ class ChatFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // 1. 初始化引擎
-        logView?.text = "正在初始化 AI 引擎...\n"
+        // 1. 初始化 AI 引擎
+        logView?.text = "正在准备 AI 助手...\n"
         context?.let { ctx ->
             GemmaEngine.initialize(ctx) { success ->
                 activity?.runOnUiThread {
                     if (success) {
-                        logView?.append("✅ 引擎就绪，开始聊天吧！\n")
+                        logView?.append("✅ 引擎已就绪，请输入问题。\n")
                     } else {
-                        logView?.append("❌ 引擎加载失败，请检查模型文件或显存。\n")
+                        logView?.append("❌ 加载失败，请检查模型文件路径或显存。\n")
                     }
                 }
             }
         }
 
-        // 2. 【核心修复】设置流式监听器
-        // 借鉴官方：AI 每吐出一个 token，这里就会被回调一次
+        // 2. 设置监听器，实现流式输出（打字机效果）
         GemmaEngine.setOnResultListener { partialText, isDone ->
             activity?.runOnUiThread {
-                // 将新出的字追加到 logView
+                // 追加显示的文字
                 logView?.append(partialText)
                 
                 if (isDone) {
-                    // 回答结束，恢复按钮，换行
                     btnSend?.isEnabled = true
                     logView?.append("\n------------------\n")
                 }
-                
-                // 实时滚动到底部
+                // 自动滚动
                 scrollToBottom()
             }
         }
 
-        // 3. 发送按钮点击事件
+        // 3. 发送按钮逻辑
         btnSend?.setOnClickListener {
             val prompt = etInput?.text.toString().trim()
             if (prompt.isNotEmpty() && GemmaEngine.isReady()) {
-                // 显示用户输入
                 logView?.append("\n我: $prompt\nAI: ")
                 etInput?.text?.clear()
                 
-                // 禁用按钮防止连续点击导致引擎崩溃
+                // 禁用按钮防止乱点
                 btnSend?.isEnabled = false
                 
-                // 【核心修复】调用异步发送接口，不再使用 getResponse
+                // 异步发送指令给 Gemma
                 GemmaEngine.sendPrompt(prompt)
                 
                 scrollToBottom()
@@ -89,10 +88,5 @@ class ChatFragment : Fragment() {
         scrollView?.post {
             scrollView?.fullScroll(View.FOCUS_DOWN)
         }
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        // 页面销毁时可以考虑是否关闭引擎，通常建议在 App 退出时才 close
     }
 }
