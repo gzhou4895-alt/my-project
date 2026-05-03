@@ -1,39 +1,33 @@
 package com.example.hello
 
+import android.os.Handler
+import android.os.Looper
+
 class LlmRunner {
 
     /**
-     * 模拟 LiteRT 推理（流式输出版本）
-     * 你后面只需要把这里替换成真正 LiteRT 推理即可
+     * 真正的推理执行方法
+     * 已经删除了模拟的 "token:" 等冗余日志信息
      */
     fun run(input: String, callback: (String) -> Unit) {
 
+        // 获取主线程 Handler，确保 UI 更新不会崩溃
+        val mainHandler = Handler(Looper.getMainLooper())
+
         Thread {
-
             try {
-                callback("🤖 模型开始加载...\n")
+                // 1. 调用刚才我们在 GemmaEngine 封装好的真实推理方法
+                val response = GemmaEngine.getResponse(input)
 
-                // 模拟加载时间
-                Thread.sleep(500)
-
-                callback("🤖 模型加载完成\n")
-                callback("🤖 开始推理...\n")
-
-                // 模拟“流式输出”（ChatGPT效果关键）
-                var output = ""
-
-                for (c in input) {
-                    Thread.sleep(80) // 模拟 token 延迟
-                    output += c
-                    callback("token: $output")
+                // 2. 将结果传回给回调函数
+                mainHandler.post {
+                    callback(response)
                 }
 
-                Thread.sleep(300)
-
-                callback("\n🤖 推理完成\n")
-
             } catch (e: Exception) {
-                callback("❌ 推理失败: ${e.message}")
+                mainHandler.post {
+                    callback("❌ 推理失败: ${e.message}")
+                }
             }
         }.start()
     }
